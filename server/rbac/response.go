@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 22:30:00
+// | @updated   2026-06-07 23:42:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -129,6 +130,7 @@ func (e *ResponseEncoder) Role(r *SysRole) gin.H {
 		"name":       r.Name,
 		"sort":       r.Sort,
 		"status":     r.Status,
+		"data_scope": r.DataScope,
 		"remark":     r.Remark,
 		"created_at": r.CreatedAt,
 		"updated_at": r.UpdatedAt,

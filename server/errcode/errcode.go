@@ -4,7 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:00:00
-// | @updated   2026-06-07 21:00:00
+// | @updated   2026-06-07 23:30:00
 // +----------------------------------------------------------------------
 
 package errcode
@@ -49,6 +49,9 @@ const (
 	OffsetRoleInUse         = 44
 	OffsetInvalidID         = 45
 	OffsetPermCodeExists    = 46
+
+	// T-003c 数据权限错误码 offset（50~59 段）
+	OffsetInvalidDataScope = 50
 )
 
 // ---------------------------------------------------------------------------
@@ -83,6 +86,7 @@ var httpStatus = map[int]int{
 	OffsetRoleInUse:             409,
 	OffsetInvalidID:             400,
 	OffsetPermCodeExists:        409,
+	OffsetInvalidDataScope:      400,
 }
 
 var i18nKeys = map[int]string{
@@ -113,6 +117,7 @@ var i18nKeys = map[int]string{
 	OffsetRoleInUse:             "sys.role_in_use",
 	OffsetInvalidID:             "sys.invalid_id",
 	OffsetPermCodeExists:        "sys.perm_code_exists",
+	OffsetInvalidDataScope:      "sys.invalid_data_scope",
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +176,9 @@ type Registry struct {
 	ErrRoleInUse         Error
 	ErrInvalidID         Error
 	ErrPermCodeExists    Error
+
+	// T-003c 数据权限
+	ErrInvalidDataScope Error
 }
 
 // NewRegistry 用配置注入的 segmentBase 构建错误码注册表。
@@ -207,6 +215,7 @@ func NewRegistry(segmentBase int) (*Registry, error) {
 		ErrRoleInUse:             newErr(segmentBase, OffsetRoleInUse),
 		ErrInvalidID:             newErr(segmentBase, OffsetInvalidID),
 		ErrPermCodeExists:        newErr(segmentBase, OffsetPermCodeExists),
+		ErrInvalidDataScope:     newErr(segmentBase, OffsetInvalidDataScope),
 	}, nil
 }
 

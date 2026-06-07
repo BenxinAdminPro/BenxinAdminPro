@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:02:00
+// | @updated   2026-06-07 23:32:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -28,6 +29,7 @@ type SysRole struct {
 	Name      string         `gorm:"type:varchar(64);not null" json:"name"`
 	Sort      int            `gorm:"default:0" json:"sort"`
 	Status    int8           `gorm:"type:tinyint;default:0;not null" json:"status"`
+	DataScope int8          `gorm:"type:tinyint;default:2;not null;comment:数据权限(1=全部,2=本人,3=本部门)" json:"data_scope"`
 	Remark    string         `gorm:"type:varchar(255)" json:"remark"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

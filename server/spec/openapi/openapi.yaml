@@ -1,10 +1,10 @@
 # +----------------------------------------------------------------------
 # | @project   本心通用管理后台 / BenxinAdminPro
-# | @mission   OpenAPI 3.0 规范 v0.4.0 — 安全头 + 认证 + 组织架构 + RBAC
+# | @mission   OpenAPI 3.0 规范 v0.5.0 — 安全头 + 认证 + 组织架构 + RBAC + 数据权限
 # | @author    仗键天涯(daxing)
 # | @email     3442535897@qq.com
 # | @date      2026-06-07 14:19:00
-# | @updated   2026-06-07 22:00:00
+# | @updated   2026-06-07 23:50:00
 # +----------------------------------------------------------------------
 
 openapi: "3.0.3"
@@ -17,7 +17,8 @@ info:
     v0.2.0: 认证接口（登录/刷新/登出/验证码）。
     v0.3.0: 组织架构（用户/部门/岗位 CRUD）。
     v0.4.0: RBAC 核心（角色/菜单/权限 + Casbin 联动 + Hashid）。
-  version: "0.4.0"
+    v0.5.0: 数据权限（角色数据范围 + 行级过滤）。
+  version: "0.5.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -209,6 +210,11 @@ components:
         name: { type: string }
         sort: { type: integer }
         status: { type: integer }
+        data_scope:
+          type: integer
+          enum: [1, 2, 3]
+          description: "数据权限 1=全部 2=仅本人 3=本部门"
+          default: 2
         remark: { type: string }
 
     SysMenu:

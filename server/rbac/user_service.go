@@ -4,7 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:12:00
-// | @updated   2026-06-07 21:18:00
+// | @updated   2026-06-07 23:44:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -46,11 +46,12 @@ type UpdateUserInput struct {
 
 // UserListQuery 用户列表查询参数。
 type UserListQuery struct {
-	Username string `form:"username"`
-	Status   *int8  `form:"status"`
-	DeptID   *uint64 `form:"dept_id"`
-	Page     int    `form:"page"`
-	PageSize int    `form:"page_size"`
+	Username string     `form:"username"`
+	Status   *int8      `form:"status"`
+	DeptID   *uint64    `form:"dept_id"`
+	Page     int        `form:"page"`
+	PageSize int        `form:"page_size"`
+	Scope    *DataScope `form:"-"` // 由 handler 注入，禁止客户端传入
 }
 
 func (q *UserListQuery) normalize() {
@@ -163,6 +164,11 @@ func (s *UserService) List(ctx context.Context, q UserListQuery) (*PageResult, e
 	}
 	if q.DeptID != nil {
 		query = query.Where("dept_id = ?", *q.DeptID)
+	}
+
+	// 数据权限过滤（自测样例：sys_user 表用 dept_id 和 id）
+	if q.Scope != nil {
+		query = query.Scopes(ApplyScope(q.Scope, ScopeFields{DeptColumn: "dept_id", UserColumn: "id"}))
 	}
 
 	var total int64

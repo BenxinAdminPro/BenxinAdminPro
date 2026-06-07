@@ -4,7 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:10:00
-// | @updated   2026-06-07 23:00:00
+// | @updated   2026-06-07 23:40:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -19,19 +19,21 @@ import (
 )
 
 type CreateRoleInput struct {
-	Code   string `json:"code" binding:"required"`
-	Name   string `json:"name" binding:"required"`
-	Sort   int    `json:"sort"`
-	Status int8   `json:"status"`
-	Remark string `json:"remark"`
+	Code      string `json:"code" binding:"required"`
+	Name      string `json:"name" binding:"required"`
+	Sort      int    `json:"sort"`
+	Status    int8   `json:"status"`
+	DataScope int8   `json:"data_scope"` // 1=全部 2=本人 3=本部门，0 默认为 2
+	Remark    string `json:"remark"`
 }
 
 type UpdateRoleInput struct {
-	Code   string `json:"code"`
-	Name   string `json:"name"`
-	Sort   int    `json:"sort"`
-	Status int8   `json:"status"`
-	Remark string `json:"remark"`
+	Code      string `json:"code"`
+	Name      string `json:"name"`
+	Sort      int    `json:"sort"`
+	Status    int8   `json:"status"`
+	DataScope *int8  `json:"data_scope"` // 指针，区分未传与零值
+	Remark    string `json:"remark"`
 }
 
 type RoleListQuery struct {
@@ -60,7 +62,16 @@ func (s *RoleService) Create(ctx context.Context, in CreateRoleInput) (*SysRole,
 	if count > 0 {
 		return nil, s.errs.ErrRoleCodeExists
 	}
-	role := SysRole{Code: in.Code, Name: in.Name, Sort: in.Sort, Status: in.Status, Remark: in.Remark}
+	// data_scope 校验：0 默认为 2（本人），非法值拒绝
+	ds := in.DataScope
+	if ds == 0 {
+		ds = 2
+	}
+	if !ValidScopeType(ds) {
+		return nil, s.errs.ErrInvalidDataScope
+	}
+
+	role := SysRole{Code: in.Code, Name: in.Name, Sort: in.Sort, Status: in.Status, DataScope: ds, Remark: in.Remark}
 	if err := s.db.WithContext(ctx).Create(&role).Error; err != nil {
 		return nil, fmt.Errorf("rbac: create role: %w", err)
 	}
@@ -97,9 +108,16 @@ func (s *RoleService) Update(ctx context.Context, id uint64, in UpdateRoleInput)
 			return s.errs.ErrRoleCodeExists
 		}
 	}
-	result := s.db.WithContext(ctx).Model(&SysRole{}).Where("id = ?", id).Updates(map[string]any{
+	updates := map[string]any{
 		"code": in.Code, "name": in.Name, "sort": in.Sort, "status": in.Status, "remark": in.Remark,
-	})
+	}
+	if in.DataScope != nil {
+		if !ValidScopeType(*in.DataScope) {
+			return s.errs.ErrInvalidDataScope
+		}
+		updates["data_scope"] = *in.DataScope
+	}
+	result := s.db.WithContext(ctx).Model(&SysRole{}).Where("id = ?", id).Updates(updates)
 	if result.RowsAffected == 0 {
 		return s.errs.ErrRoleCodeExists
 	}

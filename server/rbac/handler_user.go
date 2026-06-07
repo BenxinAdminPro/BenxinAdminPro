@@ -4,7 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:22:00
-// | @updated   2026-06-07 22:35:00
+// | @updated   2026-06-07 23:46:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -31,10 +31,11 @@ const (
 
 // UserHandler 用户 CRUD handler。
 type UserHandler struct {
-	svc    *UserService
-	errs   *errcode.Registry
-	hasher *Hasher
-	enc    *ResponseEncoder
+	svc      *UserService
+	errs     *errcode.Registry
+	hasher   *Hasher
+	enc      *ResponseEncoder
+	resolver ScopeResolver // 可选，注入后 List 自动应用数据权限
 }
 
 // NewUserHandler 创建用户 handler。
@@ -44,6 +45,11 @@ func NewUserHandler(svc *UserService, errs *errcode.Registry, hasher *Hasher) *U
 		enc = NewResponseEncoder(hasher)
 	}
 	return &UserHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
+}
+
+// SetScopeResolver 注入数据权限解析器（可选）。
+func (h *UserHandler) SetScopeResolver(r ScopeResolver) {
+	h.resolver = r
 }
 
 // RegisterRoutes 注册用户路由（全部挂 RequirePerm）。
@@ -63,6 +69,17 @@ func (h *UserHandler) List(c *gin.Context) {
 	if err := c.ShouldBindQuery(&q); err != nil {
 		respondJSON(c, http.StatusBadRequest, -1, "invalid query", nil)
 		return
+	}
+	// 注入数据权限（从服务端取，不接受客户端传入）
+	if h.resolver != nil {
+		claims := GetClaims(c)
+		if claims != nil {
+			uid, _ := strconv.ParseUint(claims.Subject, 10, 64)
+			if uid > 0 {
+				scope, _ := h.resolver.Resolve(c.Request.Context(), uid)
+				q.Scope = scope
+			}
+		}
 	}
 	result, err := h.svc.List(c.Request.Context(), q)
 	if err != nil {
