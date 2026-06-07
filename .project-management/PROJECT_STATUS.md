@@ -8,7 +8,7 @@
 - 架构文档：BenxinAdminPro-架构与规划文档 v1.1
 - 仓库：Gitee 主仓 https://gitee.com/benxin-admin-pro/benxin-admin-pro.git ；GitHub 镜像 https://github.com/BenxinAdminPro/BenxinAdminPro.git（独立于 BenxinKP）
 - 本地：/Users/daxing/projects/BenxinAdminPro（与 BenxinKP 平级，多根工作区聚合）
-- 最后更新：2026-06-08（T-005 配置中心完成）
+- 最后更新：2026-06-08（T-006 阶段一收官）
 
 ## 核心原则（铁律）
 - 业务中立：不进任何业务概念。
@@ -34,7 +34,8 @@
 
 ## 里程碑
 - 🏁 RBAC 整块完成（T-001 安全地基 → T-002 认证 → T-003 组织+RBAC a/b/c）。认证→功能权限→数据权限闭环。HEAD 当时 e167098。
-- 当前 HEAD = 448671f（T-004b 收尾，T-004 系统管理整块完成）。
+- 当前 HEAD = 303bf1e（T-005 配置中心收尾）。
+- 🏁 **Go 后端底座五大块全部完成（T-001 安全 / T-002 认证 / T-003 RBAC / T-004 系统管理 / T-005 配置中心）+ 渲染债清。阶段一后端收官，剩 admin 前端 + demo 跑通。**
 
 ## 切片进度
 
@@ -47,9 +48,10 @@
 | T-003b | RBAC 核心（角色/权限/菜单 + Casbin 联动 + Hashid 收口） | ✅ 至 bd990a7 |
 | T-003c | 数据权限（B 档三档 + 通用 DataScope 解析器） | ✅ 至 e167098（RBAC 收官） |
 | T-004a | 系统管理（response Registry 接管 + 字典 + 参数 + 操作日志 + 登录日志） | ✅ 至 f1594d0。详见下方记录。 |
-| T-004b | 文件管理 + 存储驱动（StorageDriver + LocalDriver + 鉴权下载 + 上传安全） | ✅ 至 448671f |
-| T-004c | 渲染收敛（handler 统一 response.Render + errcode 降级纯 code）| ✅ 至 589f9e1 |
-| T-005 | 配置中心（缓存+热加载+GCM 加密+迁移执行器）| ✅ 详见 `reports/T-005-report.md` |
+| T-004b | 文件管理 + 存储驱动（StorageDriver + LocalDriver + 鉴权下载 + 上传安全） | ✅ 至 448671f。T-004 整块完成。详见下方记录。 |
+| T-004c | 渲染收敛（handler 统一 response.Render + errcode 降级纯常量） | ✅ 至 589f9e1。纯重构，对外零行为变化。 |
+| T-005 | 配置中心（动态参数缓存 + 热加载 Pub/Sub + GCM 加密 + 迁移执行器） | ✅ 至 303bf1e |
+| T-006 | examples/demo 装配（五大块全链路 + 种子数据 + 迁移建表）| ✅ 阶段一收官 |
 
 **T-001~T-003 收尾记录**（详见此前版本，要点）
 - T-001 crypto/auth/rbac 三核心 + crypto-vectors KAT + DI；集成测试真后端。
@@ -76,6 +78,22 @@
 - 错误码 +70~75 注册进 response.Registry，回归快照 38/38 一致。openapi v0.7.0（redocly 0 error）。
 - 集成测试 file_integration_test.go（//go:build integration）真 MySQL+真磁盘：上传(含中文名)→落库→下载字节一致→软删；同名不覆盖；列表过滤；真盘穿越被拒+os.Stat 验。commit 8c9bd0a+448671f。
 
+**T-004c 收尾记录（PM 评审定档，渲染债清）**
+- 纯重构、对外零行为变化：消除 T-004a 遗留的两套渲染并存。
+- **errcode.Error 剥离自渲染/HTTP 语义：删 HTTP/Message 字段，只留 Code + GetCode + Error()（满足 error 接口、作 service→handler 的 code 载体）；grep 无 .HTTP/.Message 引用。** service 层完全不动。
+- **response.Registry 成为 code→HTTP→i18n 唯一权威 + 唯一渲染路径**：全 handler 走 response.OK/ErrResp/BadReq，全中间件走 response.AbortErr；grep 无 errcode.Error 渲染、无散落 AbortWithStatusJSON。各包旧 respondOK/respondError/fail/ok 已删。
+- 零行为变化双证：migration 快照 38/38（code/HTTP/i18nKey 三维一致）+ T-001~T-004b 全部旧测试全绿。各包补 testmain 初始化 Registry。
+- 重构纪律守住：未改业务/码值/接口签名；RequirePerm 26+ 处鉴权、参数校验、日志脱敏原样保留。openapi 未升版（对外契约不变）。commit 至 589f9e1。
+
+**T-005 收尾记录（PM 评审定档，后端底座收官）**
+- 边界：聚焦动态参数（sys_config/字典）缓存+热加载+加密；静态启动配置仍归 viper，不纳入。
+- **GCM 加密：crypto 新增 EncryptGCM/DecryptGCM（AES-256-GCM 认证加密），与 T-001 CBC 信封并存互不影响、C 端向量回归全绿；主密钥配置注入 fail-fast；每次随机 12B nonce + 篡改检测。** 存储格式 base64(nonce12||ct||tag)，自描述、PHP 可解，入 spec。
+- sys_config 增列 is_encrypted：写加密落库密文、读自动解密；**加密闭环三道：存密文 + 授权路径(ConfigCenter.GetConfig)解密 + 列表/详情 maskEncrypted() 返回 ******（脱敏断言 docker-free+integration）**。明文不入列表/日志。
+- ConfigCenter + 缓存层：ConfigCache 接口（RedisConfigCache 真实现 + 内存假实现）；命中→回源 DB→回填；写后失效。
+- **热加载 Redis Pub/Sub：RedisPublisher/RedisSubscriber（协程 + context 优雅退出）；集成测试验跨实例场景（实例A发布→实例B订阅→B缓存失效→读新值）真 Valkey 跑通；单实例无 Redis 退化本地刷新。**
+- **SQL 迁移执行器 migrator.go（还历史债）：读 spec/migrations、文件名字典序排序、{{TABLE_PREFIX}} 替换、按序执行、sys_migration 记录版本+校验和、幂等跳过已执行、失败中止报告。** 替代此前集成测试手动 ReplaceAll，demo 可一键建表。
+- errcode +80~81，回归快照 40/40。openapi v0.8.0（redocly 0 error）。commit 1c339e2+303bf1e。
+
 **待 daxing 真人验收（用到时补，不阻塞）**
 - 各片历史验收项见对应记录。
 - T-004a：demo 字典/参数 CRUD + 操作/登录日志查看；确认日志无敏感信息；确认错误码返回与迁移前一致；评审 Registry 业务模块可注册。
@@ -86,11 +104,9 @@
 | — | — | — | 无 |
 
 ### 下一步（计划）
-1. **T-004c 渲染收敛**（收尾债，独立任务，**不挂 T-005**）：handler 统一改走 response.Render；errcode 降级为纯常量（offset+段基址），去掉 errcode.Error 渲染路径；消除两套渲染并存。**排在 admin 前端切片之前做**（前端依赖统一包络格式）。
-2. T-005 配置中心（驱动化/加密/热加载）。替换静态 viper；参数/字典缓存与热加载；sys_config 敏感值加密存储；提供 SQL 迁移执行器（替换 {{TABLE_PREFIX}}）。
-3. admin 前端（布局/动态路由/权限/x-table）——**前置：T-004c 必须先完成**。
-4. examples/demo 跑通（登录+RBAC+配置+日志）。
-> 建议执行顺序：T-004c（还渲染债，handler 越多越贵）→ T-005 → admin 前端。
+1. **examples/demo 跑通**（登录+RBAC+配置+日志全链路）：用迁移执行器一键建表、装配 GormUserProvider/Redis 各 Store/ConfigCenter/hasher，串通五大块；**一次性兑现历次积压的 daxing 真人验收项**。不依赖前端。
+2. admin 前端（布局/动态路由/权限/x-table）：在 demo 验证过的可信后端上联调。
+> 建议执行顺序：demo 跑通（验证后端协同 + 清积压验收）→ admin 前端。前端联调时后端已是已验证状态。
 
 ### 阶段二（底座可用后）
 - BenxinKP 引入 BenxinAdminPro，只写业务；backend-php 照 spec 实现 parity。
@@ -103,11 +119,11 @@
 ## T-004 子切片拆分
 - T-004a response 接管 + 字典 + 参数 + 日志 ✅
 - T-004b 文件管理 + 存储驱动 ✅
-- T-004c 渲染收敛 ✅ — errcode.Error 降级纯 code 信号，handler/中间件统一 response.* 渲染
+- T-004c 渲染收敛（handler 统一走 response.Render、errcode 降级常量）✅
 
 ## 备注
 - 宪法级：安全第一、仅开源素材、配置驱动化、参数化复用、统一代码头注释（中英文+到秒）。
 - 设计硬约束：表前缀随实例走禁包级（T-003a）；未完成切片接口至少挂 JWT；对外 ID 入出参 hashid 闭环+装配注入 hasher（T-003b）；授权变更事务内回滚保一致（T-003b）；数据权限失败一律收紧绝不放宽（T-003c）；日志脱敏+异步不阻塞、auth 不因日志依赖 DB（T-004a）。
-- 错误码：crypto/auth（T-001/T-002）、sys（T-003 +30~+50）、system（T-004a +60~+63）、file（T-004b +70~+75）；response.Registry 为最终唯一注册/渲染权威（T-004c 收敛后）；段不破坏、冲突 fail-fast；errcode 已降级为纯 code 信号（T-004c 完成），response.Registry 为唯一渲染权威。
+- 错误码：crypto/auth（T-001/T-002）、sys（T-003 +30~+50）、system（T-004a +60~+63）、file（T-004b +70~+75）；response.Registry 为唯一注册/渲染权威（T-004c 已收敛）；errcode 已降级为纯常量（Code 载体，剥离 HTTP/Message）；段不破坏、冲突 fail-fast。
 - Casbin obj=perm code（非 URL），命名 模块:资源:动作（sys:user:list）；底座只放 sys:* 通用权限点。
 - git 经验：镜像仓建仓勿勾初始化文件否则首推 force；token 走交互式/钥匙串勿写进 remote url；GitHub/Gitee 偶发 SSL_ERROR_SYSCALL 重试即可（近期转频，必要时走代理/SSH）。

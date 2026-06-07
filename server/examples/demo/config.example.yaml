@@ -1,0 +1,77 @@
+# +----------------------------------------------------------------------
+# | @project   本心通用管理后台 / BenxinAdminPro
+# | @mission   demo 配置示例 — 占位值，复制为 config.local.yaml 填入真实值
+# | @author    仗键天涯(daxing)
+# | @email     3442535897@qq.com
+# | @date      2026-06-08 04:00:00
+# +----------------------------------------------------------------------
+#
+# 复制此文件为 config.local.yaml 并填入真实值。
+# config.local.yaml 已在 .gitignore 中排除。
+# 密钥生成：openssl rand -base64 32
+
+app:
+  table_prefix: "demo_"
+  redis_key_prefix: "demo"
+  port: 8080
+
+errcode:
+  security_segment_base: 11000
+
+crypto:
+  header_prefix: "X-Ca-"
+  aes_key_b64: ""          # openssl rand -base64 32 → 解码须 32 字节
+  hmac_key_b64: ""         # openssl rand -base64 32
+
+jwt:
+  issuer: "benxinadminpro-demo"
+  access_secret: ""        # 强随机字符串
+  refresh_secret: ""       # 与 access_secret 不同
+  access_ttl_seconds: 7200
+  refresh_ttl_seconds: 604800
+  refresh_rotate: true
+
+auth:
+  argon2id:
+    memory_kib: 19456
+    iterations: 2
+    parallelism: 1
+    salt_len: 16
+    key_len: 32
+  captcha:
+    enabled: true
+    ttl_seconds: 120
+    length: 4
+  lockout:
+    captcha_threshold: 3
+    lock_threshold: 5
+    fail_window_seconds: 900
+    lock_duration_seconds: 900
+
+rbac:
+  super_admin_roles: ["super_admin"]
+
+hashid:
+  salt: ""                 # 必填，不可空
+  min_length: 8
+
+gcm:
+  key_b64: ""              # openssl rand -base64 32 → 解码须 32 字节（配置加密用）
+
+file:
+  max_size_bytes: 10485760
+  allowed_exts: ["jpg","jpeg","png","gif","pdf","docx","xlsx","zip","txt"]
+  local:
+    root_dir: "./uploads"
+    url_prefix: "/sys/files/"
+
+seed:
+  admin_password: ""       # 超管初始密码，来自环境变量或此配置
+
+redis:
+  addr: "localhost:6379"
+  db: 0
+  password: ""
+
+mysql:
+  dsn: "root:root@tcp(localhost:3306)/benxinadminpro?charset=utf8mb4&parseTime=true&loc=Local"
