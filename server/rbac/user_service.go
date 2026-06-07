@@ -121,16 +121,24 @@ func (s *UserService) Create(ctx context.Context, in CreateUserInput) (*SysUser,
 	return &user, nil
 }
 
-// Get 获取用户详情。
+// Get 获取用户详情（手动加载关联岗位）。
 func (s *UserService) Get(ctx context.Context, id uint64) (*SysUser, error) {
 	var user SysUser
-	err := s.db.WithContext(ctx).Preload("Posts").First(&user, id).Error
+	err := s.db.WithContext(ctx).First(&user, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, s.errs.ErrUserNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("rbac: get user: %w", err)
 	}
+
+	// 手动加载关联岗位（不依赖 GORM many2many association）
+	var postIDs []uint64
+	s.db.WithContext(ctx).Model(&SysUserPost{}).Where("user_id = ?", id).Pluck("post_id", &postIDs)
+	if len(postIDs) > 0 {
+		s.db.WithContext(ctx).Where("id IN ?", postIDs).Find(&user.Posts)
+	}
+
 	user.PasswordHash = ""
 	return &user, nil
 }

@@ -13,10 +13,15 @@ import (
 	"strconv"
 	"testing"
 
+	"encoding/json"
+	"path/filepath"
+	"strings"
+
 	"github.com/benxin_dev/benxinadminpro-server/auth"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 var testArgon2Params = auth.Argon2idParams{
@@ -25,8 +30,17 @@ var testArgon2Params = auth.Argon2idParams{
 
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	SetTablePrefix("") // 测试用空前缀
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	return setupTestDBWithPrefix(t, "")
+}
+
+func setupTestDBWithPrefix(t *testing.T, prefix string) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix:   prefix,
+			SingularTable: true,
+		},
+	})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -346,6 +360,150 @@ func TestGormUserProviderNotFound(t *testing.T) {
 	_, err := provider.FindByUsername(context.Background(), "nonexistent")
 	if err != auth.ErrUserNotFound {
 		t.Errorf("expected ErrUserNotFound, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 【阻塞修复】双前缀并存测试 — 验证实例级前缀互不串表
+// ---------------------------------------------------------------------------
+
+func TestTwoPrefixesCoexist(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "shared.db")
+
+	db1, _ := gorm.Open(sqlite.Open(tmpFile), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{TablePrefix: "a_", SingularTable: true},
+	})
+	db2, _ := gorm.Open(sqlite.Open(tmpFile), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{TablePrefix: "b_", SingularTable: true},
+	})
+
+	db1.AutoMigrate(&SysUser{}) // 建 a_sys_user
+	db2.AutoMigrate(&SysUser{}) // 建 b_sys_user
+
+	reg := testReg(t)
+	hasher, _ := auth.NewPasswordHasher(testArgon2Params)
+	svc1 := NewUserService(db1, hasher, reg)
+	svc2 := NewUserService(db2, hasher, reg)
+	ctx := context.Background()
+
+	svc1.Create(ctx, CreateUserInput{Username: "alice_in_a", Password: "p"})
+	svc2.Create(ctx, CreateUserInput{Username: "bob_in_b", Password: "p"})
+
+	// a_ 只看到 alice
+	r1, _ := svc1.List(ctx, UserListQuery{Page: 1, PageSize: 10})
+	if r1.Total != 1 {
+		t.Errorf("a_ prefix: expected 1 user, got %d", r1.Total)
+	}
+
+	// b_ 只看到 bob
+	r2, _ := svc2.List(ctx, UserListQuery{Page: 1, PageSize: 10})
+	if r2.Total != 1 {
+		t.Errorf("b_ prefix: expected 1 user, got %d", r2.Total)
+	}
+
+	// provider 也隔离
+	p1 := NewGormUserProvider(db1)
+	p2 := NewGormUserProvider(db2)
+
+	_, err := p1.FindByUsername(ctx, "bob_in_b")
+	if err != auth.ErrUserNotFound {
+		t.Error("a_ provider should not find bob_in_b")
+	}
+	_, err = p2.FindByUsername(ctx, "alice_in_a")
+	if err != auth.ErrUserNotFound {
+		t.Error("b_ provider should not find alice_in_a")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 【确认1】部门防环 — 移动节点到自己的孙子下
+// ---------------------------------------------------------------------------
+
+func TestDeptMoveToGrandchild(t *testing.T) {
+	db := setupTestDB(t)
+	reg := testReg(t)
+	svc := NewDeptService(db, reg)
+	ctx := context.Background()
+
+	root, _ := svc.Create(ctx, CreateDeptInput{Name: "根"})
+	child, _ := svc.Create(ctx, CreateDeptInput{Name: "子", ParentID: root.ID})
+	grandchild, _ := svc.Create(ctx, CreateDeptInput{Name: "孙", ParentID: child.ID})
+
+	// 尝试把根节点挂到孙节点下 → 防环必须拒绝
+	err := svc.Update(ctx, root.ID, UpdateDeptInput{ParentID: &grandchild.ID, Name: "根"})
+	if err == nil {
+		t.Fatal("should reject moving root under its grandchild (cycle)")
+	}
+
+	// 尝试把子节点挂到孙节点下 → 也是环
+	err = svc.Update(ctx, child.ID, UpdateDeptInput{ParentID: &grandchild.ID, Name: "子"})
+	if err == nil {
+		t.Fatal("should reject moving child under its own child (cycle)")
+	}
+
+	// 移动到自身 → 拒绝
+	err = svc.Update(ctx, child.ID, UpdateDeptInput{ParentID: &child.ID, Name: "子"})
+	if err == nil {
+		t.Fatal("should reject moving node under itself")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 【确认2】password_hash JSON 序列化断言
+// ---------------------------------------------------------------------------
+
+func TestPasswordHashNotInJSON_Get(t *testing.T) {
+	db := setupTestDB(t)
+	reg := testReg(t)
+	hasher, _ := auth.NewPasswordHasher(testArgon2Params)
+	svc := NewUserService(db, hasher, reg)
+	ctx := context.Background()
+
+	created, _ := svc.Create(ctx, CreateUserInput{Username: "jsontest", Password: "secret"})
+
+	// Get 返回的 user 序列化后不含 password_hash
+	user, _ := svc.Get(ctx, created.ID)
+	data, _ := json.Marshal(user)
+	var m map[string]any
+	json.Unmarshal(data, &m)
+	if _, exists := m["password_hash"]; exists {
+		t.Error("Get response JSON should NOT contain password_hash")
+	}
+}
+
+func TestPasswordHashNotInJSON_List(t *testing.T) {
+	db := setupTestDB(t)
+	reg := testReg(t)
+	hasher, _ := auth.NewPasswordHasher(testArgon2Params)
+	svc := NewUserService(db, hasher, reg)
+	ctx := context.Background()
+
+	svc.Create(ctx, CreateUserInput{Username: "listjson", Password: "secret"})
+
+	result, _ := svc.List(ctx, UserListQuery{Page: 1, PageSize: 10})
+	data, _ := json.Marshal(result.List)
+	jsonStr := string(data)
+	if strings.Contains(jsonStr, "password_hash") {
+		t.Error("List response JSON should NOT contain password_hash")
+	}
+	if strings.Contains(jsonStr, "$argon2id$") {
+		t.Error("List response should NOT contain Argon2id hash values")
+	}
+}
+
+func TestPasswordHashNotInJSON_Create(t *testing.T) {
+	db := setupTestDB(t)
+	reg := testReg(t)
+	hasher, _ := auth.NewPasswordHasher(testArgon2Params)
+	svc := NewUserService(db, hasher, reg)
+	ctx := context.Background()
+
+	user, _ := svc.Create(ctx, CreateUserInput{Username: "createjson", Password: "secret"})
+	data, _ := json.Marshal(user)
+	var m map[string]any
+	json.Unmarshal(data, &m)
+	if _, exists := m["password_hash"]; exists {
+		t.Error("Create response JSON should NOT contain password_hash")
 	}
 }
 

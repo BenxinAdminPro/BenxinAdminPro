@@ -46,7 +46,8 @@
 
 ## 5. git 提交记录
 
-- 待本轮提交
+- **commit**: `44dafd4` — `feat(rbac): T-003a 组织架构 — 用户/部门/岗位 CRUD + GormUserProvider`
+- **双推**：待 daxing 确认后推送
 
 ## 6. 安全自查
 

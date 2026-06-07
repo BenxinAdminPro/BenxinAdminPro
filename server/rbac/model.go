@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:02:00
+// | @updated   2026-06-07 20:00:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -12,27 +13,26 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
-// tablePrefix 由启动时注入，所有模型的 TableName 方法使用。
-// 禁止硬编码；由 SetTablePrefix 在 main/bootstrap 中设置。
-var tablePrefix string
-
-// SetTablePrefix 设置表前缀，必须在任何数据库操作前调用。
-func SetTablePrefix(prefix string) {
-	tablePrefix = prefix
-}
-
-// GetTablePrefix 返回当前表前缀。
-func GetTablePrefix() string {
-	return tablePrefix
+// NewDBConfig 返回带表前缀的 GORM 配置。
+// 前缀绑定在 *gorm.DB 实例上（NamingStrategy），禁止包级全局变量。
+// 调用方：gorm.Open(dialector, rbac.NewDBConfig("kp_"))
+func NewDBConfig(tablePrefix string) *gorm.Config {
+	return &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix:   tablePrefix,
+			SingularTable: true,
+		},
+	}
 }
 
 // ---------------------------------------------------------------------------
 // SysUser 用户
 // ---------------------------------------------------------------------------
 
-// SysUser 用户表模型。
+// SysUser 用户表模型。表名由 NamingStrategy 前缀决定：{prefix}sys_user。
 type SysUser struct {
 	ID           uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
 	Username     string         `gorm:"type:varchar(64);uniqueIndex;not null" json:"username"`
@@ -48,17 +48,15 @@ type SysUser struct {
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 
-	// 关联
-	Posts []SysPost `gorm:"many2many:sys_user_post;joinForeignKey:user_id;joinReferences:post_id" json:"posts,omitempty"`
+	// 非持久化，由 service 手动填充
+	Posts []SysPost `gorm:"-" json:"posts,omitempty"`
 }
-
-func (SysUser) TableName() string { return tablePrefix + "sys_user" }
 
 // ---------------------------------------------------------------------------
 // SysDept 部门（树形）
 // ---------------------------------------------------------------------------
 
-// SysDept 部门表模型。
+// SysDept 部门表模型。表名：{prefix}sys_dept。
 type SysDept struct {
 	ID        uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
 	ParentID  uint64         `gorm:"default:0;not null" json:"parent_id"`
@@ -75,13 +73,11 @@ type SysDept struct {
 	Children []*SysDept `gorm:"-" json:"children,omitempty"`
 }
 
-func (SysDept) TableName() string { return tablePrefix + "sys_dept" }
-
 // ---------------------------------------------------------------------------
 // SysPost 岗位
 // ---------------------------------------------------------------------------
 
-// SysPost 岗位表模型。
+// SysPost 岗位表模型。表名：{prefix}sys_post。
 type SysPost struct {
 	ID        uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
 	Code      string         `gorm:"type:varchar(64);uniqueIndex;not null" json:"code"`
@@ -93,19 +89,15 @@ type SysPost struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-func (SysPost) TableName() string { return tablePrefix + "sys_post" }
-
 // ---------------------------------------------------------------------------
 // SysUserPost 用户-岗位关联（多对多）
 // ---------------------------------------------------------------------------
 
-// SysUserPost 用户岗位关联表。
+// SysUserPost 用户岗位关联表。表名：{prefix}sys_user_post。
 type SysUserPost struct {
 	UserID uint64 `gorm:"primaryKey" json:"user_id"`
 	PostID uint64 `gorm:"primaryKey" json:"post_id"`
 }
-
-func (SysUserPost) TableName() string { return tablePrefix + "sys_user_post" }
 
 // ---------------------------------------------------------------------------
 // 分页

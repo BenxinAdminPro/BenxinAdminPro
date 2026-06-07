@@ -39,12 +39,10 @@ func orgMigrationDir() string {
 
 func setupOrgMySQL(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(mysql.Open(orgTestDSN), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(orgTestDSN), NewDBConfig(orgTestTablePrefix))
 	if err != nil {
 		t.Fatalf("connect mysql: %v", err)
 	}
-
-	SetTablePrefix(orgTestTablePrefix)
 
 	// 清理旧表
 	tables := []string{"sys_user_post", "sys_user", "sys_dept", "sys_post"}
