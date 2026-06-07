@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/benxin_dev/benxinadminpro-server/crypto"
+	"github.com/benxin_dev/benxinadminpro-server/errcode"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
@@ -214,6 +215,42 @@ func TestMigrator_PrefixReplacement(t *testing.T) {
 	db.Model(&SysMigration{}).Pluck("version", &versions)
 	if len(versions) != 1 {
 		t.Errorf("expected 1 record, got %d", len(versions))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 加密参数列表脱敏断言（docker-free）
+// ---------------------------------------------------------------------------
+
+func TestConfigService_EncryptedMaskedInList(t *testing.T) {
+	db := setupCenterDB(t)
+	gcmKey := testGCMKey
+
+	encrypted, _ := crypto.EncryptGCM(gcmKey, []byte("my-api-key-secret"))
+	db.Create(&SysConfig{ConfigKey: "api.key", ConfigValue: encrypted, IsEncrypted: 1, Name: "API密钥"})
+	db.Create(&SysConfig{ConfigKey: "site.url", ConfigValue: "https://example.com", IsEncrypted: 0, Name: "站点URL"})
+
+	svc := NewConfigService(db, func() *errcode.Registry { r, _ := errcode.NewRegistry(11000); return r }())
+	list, _, _ := svc.List(context.Background(), 1, 10)
+
+	for _, cfg := range list {
+		if cfg.IsEncrypted == 1 {
+			if cfg.ConfigValue != MaskedValue {
+				t.Errorf("encrypted param %q value should be %q, got %q", cfg.ConfigKey, MaskedValue, cfg.ConfigValue)
+			}
+			if cfg.ConfigValue == "my-api-key-secret" {
+				t.Fatal("plaintext leaked in list!")
+			}
+		}
+		if cfg.ConfigKey == "site.url" && cfg.ConfigValue != "https://example.com" {
+			t.Error("non-encrypted param should keep original value")
+		}
+	}
+
+	// GetByKey 也应脱敏
+	got, _ := svc.GetByKey(context.Background(), "api.key")
+	if got.ConfigValue != MaskedValue {
+		t.Errorf("GetByKey encrypted should be masked, got %q", got.ConfigValue)
 	}
 }
 

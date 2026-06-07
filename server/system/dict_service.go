@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 00:15:00
+// | @updated   2026-06-08 03:40:00
 // +----------------------------------------------------------------------
 
 package system
@@ -141,13 +142,21 @@ func (s *ConfigService) Create(ctx context.Context, in CreateConfigInput) (*SysC
 	return &cfg, nil
 }
 
+// MaskedValue 加密参数在列表/详情中的脱敏占位。
+const MaskedValue = "******"
+
 func (s *ConfigService) GetByKey(ctx context.Context, key string) (*SysConfig, error) {
 	var cfg SysConfig
 	err := s.db.WithContext(ctx).Where("config_key = ?", key).First(&cfg).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, s.errs.ErrConfigNotFound
 	}
-	return &cfg, err
+	if err != nil {
+		return nil, err
+	}
+	// 加密参数脱敏：列表/详情不返回明文
+	maskEncrypted(&cfg)
+	return &cfg, nil
 }
 
 func (s *ConfigService) List(ctx context.Context, page, pageSize int) ([]SysConfig, int64, error) {
@@ -157,7 +166,18 @@ func (s *ConfigService) List(ctx context.Context, page, pageSize int) ([]SysConf
 	s.db.WithContext(ctx).Model(&SysConfig{}).Count(&total)
 	var list []SysConfig
 	s.db.WithContext(ctx).Offset((page-1)*pageSize).Limit(pageSize).Order("id ASC").Find(&list)
+	// 加密参数脱敏
+	for i := range list {
+		maskEncrypted(&list[i])
+	}
 	return list, total, nil
+}
+
+// maskEncrypted 对 is_encrypted=1 的参数值脱敏为 ******。
+func maskEncrypted(cfg *SysConfig) {
+	if cfg.IsEncrypted == 1 {
+		cfg.ConfigValue = MaskedValue
+	}
 }
 
 func (s *ConfigService) Update(ctx context.Context, id uint64, in CreateConfigInput) error {
