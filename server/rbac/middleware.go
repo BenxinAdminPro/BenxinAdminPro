@@ -5,12 +5,14 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:13:00
 // | @updated   2026-06-07 21:50:00
+// | @updated   2026-06-08 02:40:00
 // +----------------------------------------------------------------------
 
 package rbac
 
 import (
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
 )
@@ -60,10 +62,7 @@ func (a *AuthzEnforcer) RequirePerm(permCode string) gin.HandlerFunc {
 		// 非超管走 enforce
 		allowed, err := a.enforcer.Enforce(sub, permCode, PolicyAct)
 		if err != nil || !allowed {
-			c.AbortWithStatusJSON(a.errs.ErrForbidden.HTTP, gin.H{
-				"code":    a.errs.ErrForbidden.Code,
-				"message": a.errs.ErrForbidden.Message,
-			})
+			response.AbortErr(c, a.errs.ErrForbidden.Code)
 			return
 		}
 
@@ -110,10 +109,7 @@ func Authz(e *casbin.Enforcer, cfg AuthzConfig, subjectFn SubjectFunc, errs *err
 		}
 		allowed, err := ae.enforcer.Enforce(sub, code, PolicyAct)
 		if err != nil || !allowed {
-			c.AbortWithStatusJSON(ae.errs.ErrForbidden.HTTP, gin.H{
-				"code":    ae.errs.ErrForbidden.Code,
-				"message": ae.errs.ErrForbidden.Message,
-			})
+			response.AbortErr(c, ae.errs.ErrForbidden.Code)
 			return
 		}
 		c.Next()

@@ -5,13 +5,16 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:25:00
 // | @updated   2026-06-07 22:50:00
+// | @updated   2026-06-08 02:40:00
 // +----------------------------------------------------------------------
 
 package rbac
 
 import (
+	"net/http"
 	"strconv"
 
+	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -41,33 +44,33 @@ func (h *AuthInfoHandler) RegisterRoutes(rg *gin.RouterGroup) {
 func (h *AuthInfoHandler) Menus(c *gin.Context) {
 	userID := h.currentUserID(c)
 	if userID == 0 {
-		respondJSON(c, 401, -1, "unauthorized", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{"code": -1, "message": "unauthorized"})
 		return
 	}
 	tree, err := h.menuSvc.GetUserMenuTree(c.Request.Context(), userID)
 	if err != nil {
-		respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
-	if h.enc != nil { respondOK(c, h.enc.MenuTree(tree)) } else { respondOK(c, tree) }
+	if h.enc != nil { response.OK(c, h.enc.MenuTree(tree)) } else { response.OK(c, tree) }
 }
 
 // Perms 返回当前用户权限码集合。
 func (h *AuthInfoHandler) Perms(c *gin.Context) {
 	userID := h.currentUserID(c)
 	if userID == 0 {
-		respondJSON(c, 401, -1, "unauthorized", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{"code": -1, "message": "unauthorized"})
 		return
 	}
 	codes, err := h.menuSvc.GetUserPermCodes(c.Request.Context(), userID)
 	if err != nil {
-		respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
 	if codes == nil {
 		codes = []string{}
 	}
-	respondOK(c, codes)
+	response.OK(c, codes)
 }
 
 func (h *AuthInfoHandler) currentUserID(c *gin.Context) uint64 {

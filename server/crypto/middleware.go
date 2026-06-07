@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:05:00
+// | @updated   2026-06-08 02:40:00
 // +----------------------------------------------------------------------
 
 package crypto
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -276,8 +278,5 @@ func (w *encryptResponseWriter) WriteString(s string) (int, error) {
 // ---------------------------------------------------------------------------
 
 func (m *Middleware) abort(c *gin.Context, e errcode.Error) {
-	c.AbortWithStatusJSON(e.HTTP, gin.H{
-		"code":    e.Code,
-		"message": e.Message,
-	})
+	response.AbortErr(c, e.Code)
 }

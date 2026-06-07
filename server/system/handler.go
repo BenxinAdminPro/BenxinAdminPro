@@ -4,16 +4,17 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 00:30:00
+// | @updated   2026-06-08 02:40:00
 // +----------------------------------------------------------------------
 
 package system
 
 import (
-	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -69,31 +70,31 @@ func (h *Handler) ListDictTypes(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	list, total, _ := h.dictSvc.ListTypes(c.Request.Context(), page, ps)
-	ok(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
+	response.OK(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
 }
 
 func (h *Handler) CreateDictType(c *gin.Context) {
 	var in CreateDictTypeInput
-	if err := c.ShouldBindJSON(&in); err != nil { bad(c); return }
+	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
 	dt, err := h.dictSvc.CreateType(c.Request.Context(), in)
-	if err != nil { fail(c, err); return }
-	ok(c, dt)
+	if err != nil { response.ErrResp(c, err); return }
+	response.OK(c, dt)
 }
 
 func (h *Handler) UpdateDictType(c *gin.Context) {
 	id, err := pid(c)
 	if err != nil { return }
 	var in CreateDictTypeInput
-	if err := c.ShouldBindJSON(&in); err != nil { bad(c); return }
-	if err := h.dictSvc.UpdateType(c.Request.Context(), id, in); err != nil { fail(c, err); return }
-	ok(c, nil)
+	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
+	if err := h.dictSvc.UpdateType(c.Request.Context(), id, in); err != nil { response.ErrResp(c, err); return }
+	response.OK(c, nil)
 }
 
 func (h *Handler) DeleteDictType(c *gin.Context) {
 	id, err := pid(c)
 	if err != nil { return }
-	if err := h.dictSvc.DeleteType(c.Request.Context(), id); err != nil { fail(c, err); return }
-	ok(c, nil)
+	if err := h.dictSvc.DeleteType(c.Request.Context(), id); err != nil { response.ErrResp(c, err); return }
+	response.OK(c, nil)
 }
 
 // --- 字典项 ---
@@ -101,31 +102,31 @@ func (h *Handler) DeleteDictType(c *gin.Context) {
 func (h *Handler) ListDictData(c *gin.Context) {
 	dictType := c.Query("dict_type")
 	list, _ := h.dictSvc.ListDataByType(c.Request.Context(), dictType)
-	ok(c, list)
+	response.OK(c, list)
 }
 
 func (h *Handler) CreateDictData(c *gin.Context) {
 	var in CreateDictDataInput
-	if err := c.ShouldBindJSON(&in); err != nil { bad(c); return }
+	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
 	dd, err := h.dictSvc.CreateData(c.Request.Context(), in)
-	if err != nil { fail(c, err); return }
-	ok(c, dd)
+	if err != nil { response.ErrResp(c, err); return }
+	response.OK(c, dd)
 }
 
 func (h *Handler) UpdateDictData(c *gin.Context) {
 	id, err := pid(c)
 	if err != nil { return }
 	var in CreateDictDataInput
-	if err := c.ShouldBindJSON(&in); err != nil { bad(c); return }
-	if err := h.dictSvc.UpdateData(c.Request.Context(), id, in); err != nil { fail(c, err); return }
-	ok(c, nil)
+	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
+	if err := h.dictSvc.UpdateData(c.Request.Context(), id, in); err != nil { response.ErrResp(c, err); return }
+	response.OK(c, nil)
 }
 
 func (h *Handler) DeleteDictData(c *gin.Context) {
 	id, err := pid(c)
 	if err != nil { return }
-	if err := h.dictSvc.DeleteData(c.Request.Context(), id); err != nil { fail(c, err); return }
-	ok(c, nil)
+	if err := h.dictSvc.DeleteData(c.Request.Context(), id); err != nil { response.ErrResp(c, err); return }
+	response.OK(c, nil)
 }
 
 // --- 参数 ---
@@ -134,31 +135,31 @@ func (h *Handler) ListConfigs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	list, total, _ := h.configSvc.List(c.Request.Context(), page, ps)
-	ok(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
+	response.OK(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
 }
 
 func (h *Handler) CreateConfig(c *gin.Context) {
 	var in CreateConfigInput
-	if err := c.ShouldBindJSON(&in); err != nil { bad(c); return }
+	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
 	cfg, err := h.configSvc.Create(c.Request.Context(), in)
-	if err != nil { fail(c, err); return }
-	ok(c, cfg)
+	if err != nil { response.ErrResp(c, err); return }
+	response.OK(c, cfg)
 }
 
 func (h *Handler) UpdateConfig(c *gin.Context) {
 	id, err := pid(c)
 	if err != nil { return }
 	var in CreateConfigInput
-	if err := c.ShouldBindJSON(&in); err != nil { bad(c); return }
-	if err := h.configSvc.Update(c.Request.Context(), id, in); err != nil { fail(c, err); return }
-	ok(c, nil)
+	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
+	if err := h.configSvc.Update(c.Request.Context(), id, in); err != nil { response.ErrResp(c, err); return }
+	response.OK(c, nil)
 }
 
 func (h *Handler) DeleteConfig(c *gin.Context) {
 	id, err := pid(c)
 	if err != nil { return }
-	if err := h.configSvc.Delete(c.Request.Context(), id); err != nil { fail(c, err); return }
-	ok(c, nil)
+	if err := h.configSvc.Delete(c.Request.Context(), id); err != nil { response.ErrResp(c, err); return }
+	response.OK(c, nil)
 }
 
 // --- 日志 ---
@@ -168,13 +169,13 @@ func (h *Handler) ListOperLogs(c *gin.Context) {
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	operator := c.Query("operator")
 	list, total, _ := h.logSvc.ListOperLogs(c.Request.Context(), operator, nil, nil, page, ps)
-	ok(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
+	response.OK(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
 }
 
 func (h *Handler) CleanOperLogs(c *gin.Context) {
 	before := time.Now().AddDate(0, -3, 0) // 默认清 3 个月前
 	rows, _ := h.logSvc.CleanOperLogs(c.Request.Context(), before)
-	ok(c, gin.H{"deleted": rows})
+	response.OK(c, gin.H{"deleted": rows})
 }
 
 func (h *Handler) ListLoginLogs(c *gin.Context) {
@@ -182,28 +183,19 @@ func (h *Handler) ListLoginLogs(c *gin.Context) {
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	username := c.Query("username")
 	list, total, _ := h.logSvc.ListLoginLogs(c.Request.Context(), username, page, ps)
-	ok(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
+	response.OK(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
 }
 
 func (h *Handler) CleanLoginLogs(c *gin.Context) {
 	before := time.Now().AddDate(0, -3, 0)
 	rows, _ := h.logSvc.CleanLoginLogs(c.Request.Context(), before)
-	ok(c, gin.H{"deleted": rows})
+	response.OK(c, gin.H{"deleted": rows})
 }
 
 // --- 辅助 ---
 
-func ok(c *gin.Context, data any)  { c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": data}) }
-func bad(c *gin.Context)           { c.JSON(http.StatusBadRequest, gin.H{"code": -1, "message": "invalid request"}) }
-func fail(c *gin.Context, err error) {
-	if ecErr, ok := err.(errcode.Error); ok {
-		c.JSON(ecErr.HTTP, gin.H{"code": ecErr.Code, "message": ecErr.Message})
-		return
-	}
-	c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "message": "internal error"})
-}
 func pid(c *gin.Context) (uint64, error) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil { bad(c) }
+	if err != nil { response.BadReq(c) }
 	return id, err
 }

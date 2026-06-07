@@ -4,16 +4,16 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 17:18:00
+// | @updated   2026-06-08 02:40:00
 // +----------------------------------------------------------------------
 
 package auth
 
 import (
-	"errors"
-	"net/http"
 	"strings"
 
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -40,10 +40,10 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 func (h *Handler) Captcha(c *gin.Context) {
 	captcha, err := h.svc.IssueCaptcha(c.Request.Context())
 	if err != nil {
-		h.respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
-	h.respondOK(c, captcha)
+	response.OK(c, captcha)
 }
 
 // Login 登录。
@@ -55,7 +55,7 @@ func (h *Handler) Login(c *gin.Context) {
 		CaptchaCode string `json:"captcha_code"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil)
+		response.BadReq(c)
 		return
 	}
 
@@ -67,11 +67,11 @@ func (h *Handler) Login(c *gin.Context) {
 		ClientIP:    c.ClientIP(),
 	})
 	if err != nil {
-		h.respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
 
-	h.respondOK(c, gin.H{
+	response.OK(c, gin.H{
 		"access_token":  pair.AccessToken,
 		"refresh_token": pair.RefreshToken,
 		"access_exp":    pair.AccessExp,
@@ -86,17 +86,17 @@ func (h *Handler) Refresh(c *gin.Context) {
 		RefreshToken string `json:"refresh_token" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil)
+		response.BadReq(c)
 		return
 	}
 
 	pair, err := h.svc.Refresh(c.Request.Context(), req.RefreshToken)
 	if err != nil {
-		h.respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
 
-	h.respondOK(c, gin.H{
+	response.OK(c, gin.H{
 		"access_token":  pair.AccessToken,
 		"refresh_token": pair.RefreshToken,
 		"access_exp":    pair.AccessExp,
@@ -110,7 +110,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	// access token 从 Authorization header 取
 	accessToken := extractBearerToken(c)
 	if accessToken == "" {
-		h.respondJSON(c, http.StatusUnauthorized, h.errs.ErrTokenInvalid.Code, h.errs.ErrTokenInvalid.Message, nil)
+		response.AbortErr(c, h.errs.ErrTokenInvalid.Code)
 		return
 	}
 
@@ -120,36 +120,11 @@ func (h *Handler) Logout(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req) // refresh_token 可选
 
 	if err := h.svc.Logout(c.Request.Context(), accessToken, req.RefreshToken); err != nil {
-		h.respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
 
-	h.respondOK(c, gin.H{})
-}
-
-// ---------------------------------------------------------------------------
-// 响应辅助
-// ---------------------------------------------------------------------------
-
-func (h *Handler) respondOK(c *gin.Context, data any) {
-	h.respondJSON(c, http.StatusOK, 0, "ok", data)
-}
-
-func (h *Handler) respondJSON(c *gin.Context, httpStatus, code int, message string, data any) {
-	c.JSON(httpStatus, gin.H{
-		"code":    code,
-		"message": message,
-		"data":    data,
-	})
-}
-
-func (h *Handler) respondError(c *gin.Context, err error) {
-	var ecErr errcode.Error
-	if errors.As(err, &ecErr) {
-		h.respondJSON(c, ecErr.HTTP, ecErr.Code, ecErr.Message, nil)
-		return
-	}
-	h.respondJSON(c, http.StatusInternalServerError, -1, "internal error", nil)
+	response.OK(c, gin.H{})
 }
 
 func extractBearerToken(c *gin.Context) string {

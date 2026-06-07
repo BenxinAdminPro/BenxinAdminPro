@@ -4,7 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:00:00
-// | @updated   2026-06-08 01:22:00
+// | @updated   2026-06-08 02:30:00
 // +----------------------------------------------------------------------
 
 package errcode
@@ -158,17 +158,20 @@ var i18nKeys = map[int]string{
 // Error 类型
 // ---------------------------------------------------------------------------
 
-// Error 表示一个已解析的安全错误码（code = segmentBase + offset）。
+// Error 是带 code 的纯错误信号。
+// T-004c 降级：不再携带 HTTP 字段和自渲染逻辑。
+// HTTP 状态与 message 的唯一权威 = response.Registry。
 type Error struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	HTTP    int    `json:"-"`
+	Code int // 最终码（segmentBase + offset）
 }
 
 // Error 实现 error 接口。
 func (e Error) Error() string {
-	return fmt.Sprintf("[%d] %s", e.Code, e.Message)
+	return fmt.Sprintf("errcode:%d", e.Code)
 }
+
+// GetCode 返回错误码（供 response.HandleError 提取）。
+func (e Error) GetCode() int { return e.Code }
 
 // ---------------------------------------------------------------------------
 // Registry — 启动时由 segmentBase 注入，解析出全部安全错误码
@@ -277,13 +280,44 @@ func NewRegistry(segmentBase int) (*Registry, error) {
 	}, nil
 }
 
-// AllSpecs 返回所有已注册错误码的规格列表，供 response.Registry 迁移使用。
+// AllSpecs 返回所有已注册错误码的规格列表，供 response.Registry 注册。
+// HTTP 和 i18nKey 从静态映射取（唯一来源），不从 Error 字段取（已剥离）。
 func (r *Registry) AllSpecs() []struct{ Code, HTTP int; I18nKey string } {
 	var specs []struct{ Code, HTTP int; I18nKey string }
-	for _, e := range r.allErrors() {
-		specs = append(specs, struct{ Code, HTTP int; I18nKey string }{e.Code, e.HTTP, e.Message})
+	for _, pair := range r.allOffsets() {
+		code := pair[0]
+		offset := pair[1]
+		specs = append(specs, struct{ Code, HTTP int; I18nKey string }{
+			Code: code, HTTP: httpStatus[offset], I18nKey: i18nKeys[offset],
+		})
 	}
 	return specs
+}
+
+// allOffsets 返回 (code, offset) 对。
+func (r *Registry) allOffsets() [][2]int {
+	errs := r.allErrors()
+	offsets := []int{
+		OffsetMissingSecurityHeaders, OffsetTimestampExpired, OffsetSignInvalid,
+		OffsetNonceReplay, OffsetDecryptFailed, OffsetTokenInvalid,
+		OffsetTokenExpired, OffsetTokenRevoked, OffsetForbidden,
+		OffsetBadCredentials, OffsetCaptchaRequired, OffsetCaptchaInvalid,
+		OffsetAccountLocked, OffsetAccountDisabled,
+		OffsetUserNotFound, OffsetUsernameExists, OffsetDeptHasChildren,
+		OffsetDeptHasUsers, OffsetPostCodeExists, OffsetInvalidParentDept,
+		OffsetRoleCodeExists, OffsetMenuPermRequired, OffsetMenuPermForbidden,
+		OffsetMenuHasChildren, OffsetRoleInUse, OffsetInvalidID, OffsetPermCodeExists,
+		OffsetInvalidDataScope,
+		OffsetDictTypeExists, OffsetDictTypeNotFound,
+		OffsetConfigKeyExists, OffsetConfigNotFound,
+		OffsetFileTooLarge, OffsetFileExtNotAllowed, OffsetFileTypeMismatch,
+		OffsetFileNotFound, OffsetFileNameInvalid, OffsetStorageFailed,
+	}
+	var pairs [][2]int
+	for i, e := range errs {
+		pairs = append(pairs, [2]int{e.Code, offsets[i]})
+	}
+	return pairs
 }
 
 func (r *Registry) allErrors() []Error {
@@ -306,9 +340,11 @@ func (r *Registry) allErrors() []Error {
 }
 
 func newErr(base, offset int) Error {
-	return Error{
-		Code:    base + offset,
-		Message: i18nKeys[offset],
-		HTTP:    httpStatus[offset],
-	}
+	return Error{Code: base + offset}
 }
+
+// HTTPStatus 返回 offset 对应的 HTTP 状态码（供 AllSpecs 用）。
+func HTTPStatus(offset int) int { return httpStatus[offset] }
+
+// I18nKey 返回 offset 对应的 i18n 消息键（供 AllSpecs 用）。
+func I18nKey(offset int) string { return i18nKeys[offset] }

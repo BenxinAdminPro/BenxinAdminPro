@@ -5,15 +5,16 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:22:00
 // | @updated   2026-06-07 23:46:00
+// | @updated   2026-06-08 02:40:00
 // +----------------------------------------------------------------------
 
 package rbac
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -67,7 +68,7 @@ func (h *UserHandler) RegisterRoutes(rg *gin.RouterGroup) {
 func (h *UserHandler) List(c *gin.Context) {
 	var q UserListQuery
 	if err := c.ShouldBindQuery(&q); err != nil {
-		respondJSON(c, http.StatusBadRequest, -1, "invalid query", nil)
+		response.BadReq(c)
 		return
 	}
 	// 注入数据权限（从服务端取，不接受客户端传入）
@@ -83,31 +84,31 @@ func (h *UserHandler) List(c *gin.Context) {
 	}
 	result, err := h.svc.List(c.Request.Context(), q)
 	if err != nil {
-		respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
 	if h.enc != nil {
-		respondOK(c, h.enc.UserList(result))
+		response.OK(c, h.enc.UserList(result))
 	} else {
-		respondOK(c, result)
+		response.OK(c, result)
 	}
 }
 
 func (h *UserHandler) Create(c *gin.Context) {
 	var in CreateUserInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil)
+		response.BadReq(c)
 		return
 	}
 	user, err := h.svc.Create(c.Request.Context(), in)
 	if err != nil {
-		respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
 	if h.enc != nil {
-		respondOK(c, h.enc.User(user))
+		response.OK(c, h.enc.User(user))
 	} else {
-		respondOK(c, user)
+		response.OK(c, user)
 	}
 }
 
@@ -118,13 +119,13 @@ func (h *UserHandler) Get(c *gin.Context) {
 	}
 	user, err := h.svc.Get(c.Request.Context(), id)
 	if err != nil {
-		respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
 	if h.enc != nil {
-		respondOK(c, h.enc.User(user))
+		response.OK(c, h.enc.User(user))
 	} else {
-		respondOK(c, user)
+		response.OK(c, user)
 	}
 }
 
@@ -135,14 +136,14 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}
 	var in UpdateUserInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil)
+		response.BadReq(c)
 		return
 	}
 	if err := h.svc.Update(c.Request.Context(), id, in); err != nil {
-		respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
-	respondOK(c, nil)
+	response.OK(c, nil)
 }
 
 func (h *UserHandler) Delete(c *gin.Context) {
@@ -151,10 +152,10 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
-	respondOK(c, nil)
+	response.OK(c, nil)
 }
 
 func (h *UserHandler) ResetPassword(c *gin.Context) {
@@ -166,14 +167,14 @@ func (h *UserHandler) ResetPassword(c *gin.Context) {
 		Password string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil)
+		response.BadReq(c)
 		return
 	}
 	if err := h.svc.ResetPassword(c.Request.Context(), id, req.Password); err != nil {
-		respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
-	respondOK(c, nil)
+	response.OK(c, nil)
 }
 
 func (h *UserHandler) SetStatus(c *gin.Context) {
@@ -185,14 +186,14 @@ func (h *UserHandler) SetStatus(c *gin.Context) {
 		Status int8 `json:"status"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil)
+		response.BadReq(c)
 		return
 	}
 	if err := h.svc.SetStatus(c.Request.Context(), id, req.Status); err != nil {
-		respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
-	respondOK(c, nil)
+	response.OK(c, nil)
 }
 
 func (h *UserHandler) AssignRoles(c *gin.Context) {
@@ -204,40 +205,24 @@ func (h *UserHandler) AssignRoles(c *gin.Context) {
 		RoleIDs []uint64 `json:"role_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil)
+		response.BadReq(c)
 		return
 	}
 	if err := h.svc.AssignRoles(c.Request.Context(), id, req.RoleIDs); err != nil {
-		respondError(c, err)
+		response.ErrResp(c, err)
 		return
 	}
-	respondOK(c, nil)
+	response.OK(c, nil)
 }
 
 // ---------------------------------------------------------------------------
-// 响应辅助（包内共用）
+// 辅助
 // ---------------------------------------------------------------------------
-
-func respondOK(c *gin.Context, data any) {
-	respondJSON(c, http.StatusOK, 0, "ok", data)
-}
-
-func respondJSON(c *gin.Context, httpStatus, code int, message string, data any) {
-	c.JSON(httpStatus, gin.H{"code": code, "message": message, "data": data})
-}
-
-func respondError(c *gin.Context, err error) {
-	if ecErr, ok := err.(errcode.Error); ok {
-		respondJSON(c, ecErr.HTTP, ecErr.Code, ecErr.Message, nil)
-		return
-	}
-	respondJSON(c, http.StatusInternalServerError, -1, "internal error", nil)
-}
 
 func parseID(c *gin.Context, param string) (uint64, error) {
 	id, err := strconv.ParseUint(c.Param(param), 10, 64)
 	if err != nil {
-		respondJSON(c, http.StatusBadRequest, -1, "invalid id", nil)
+		response.BadReq(c)
 		return 0, err
 	}
 	return id, nil
@@ -247,7 +232,7 @@ func (h *UserHandler) parseHID(c *gin.Context, param string) (uint64, error) {
 	if h.hasher != nil {
 		id, err := h.hasher.Decode(c.Param(param))
 		if err != nil {
-			respondJSON(c, h.errs.ErrInvalidID.HTTP, h.errs.ErrInvalidID.Code, h.errs.ErrInvalidID.Message, nil)
+			response.AbortErr(c, h.errs.ErrInvalidID.Code)
 			return 0, err
 		}
 		return id, nil

@@ -5,14 +5,14 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:22:00
 // | @updated   2026-06-07 22:50:00
+// | @updated   2026-06-08 02:40:00
 // +----------------------------------------------------------------------
 
 package rbac
 
 import (
-	"net/http"
-
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -44,40 +44,40 @@ func (h *RoleHandler) List(c *gin.Context) {
 	var q RoleListQuery
 	c.ShouldBindQuery(&q)
 	result, err := h.svc.List(c.Request.Context(), q)
-	if err != nil { respondError(c, err); return }
-	if h.enc != nil { respondOK(c, h.enc.RoleList(result)) } else { respondOK(c, result) }
+	if err != nil { response.ErrResp(c, err); return }
+	if h.enc != nil { response.OK(c, h.enc.RoleList(result)) } else { response.OK(c, result) }
 }
 
 func (h *RoleHandler) Create(c *gin.Context) {
 	var in CreateRoleInput
-	if err := c.ShouldBindJSON(&in); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
+	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
 	role, err := h.svc.Create(c.Request.Context(), in)
-	if err != nil { respondError(c, err); return }
-	if h.enc != nil { respondOK(c, h.enc.Role(role)) } else { respondOK(c, role) }
+	if err != nil { response.ErrResp(c, err); return }
+	if h.enc != nil { response.OK(c, h.enc.Role(role)) } else { response.OK(c, role) }
 }
 
 func (h *RoleHandler) Get(c *gin.Context) {
 	id, err := h.parseHID(c, "id")
 	if err != nil { return }
 	role, err := h.svc.Get(c.Request.Context(), id)
-	if err != nil { respondError(c, err); return }
-	if h.enc != nil { respondOK(c, h.enc.Role(role)) } else { respondOK(c, role) }
+	if err != nil { response.ErrResp(c, err); return }
+	if h.enc != nil { response.OK(c, h.enc.Role(role)) } else { response.OK(c, role) }
 }
 
 func (h *RoleHandler) Update(c *gin.Context) {
 	id, err := h.parseHID(c, "id")
 	if err != nil { return }
 	var in UpdateRoleInput
-	if err := c.ShouldBindJSON(&in); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
-	if err := h.svc.Update(c.Request.Context(), id, in); err != nil { respondError(c, err); return }
-	respondOK(c, nil)
+	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
+	if err := h.svc.Update(c.Request.Context(), id, in); err != nil { response.ErrResp(c, err); return }
+	response.OK(c, nil)
 }
 
 func (h *RoleHandler) Delete(c *gin.Context) {
 	id, err := h.parseHID(c, "id")
 	if err != nil { return }
-	if err := h.svc.Delete(c.Request.Context(), id); err != nil { respondError(c, err); return }
-	respondOK(c, nil)
+	if err := h.svc.Delete(c.Request.Context(), id); err != nil { response.ErrResp(c, err); return }
+	response.OK(c, nil)
 }
 
 func (h *RoleHandler) AssignMenus(c *gin.Context) {
@@ -86,16 +86,16 @@ func (h *RoleHandler) AssignMenus(c *gin.Context) {
 	var req struct {
 		MenuIDs []uint64 `json:"menu_ids"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
-	if err := h.svc.AssignMenus(c.Request.Context(), id, req.MenuIDs); err != nil { respondError(c, err); return }
-	respondOK(c, nil)
+	if err := c.ShouldBindJSON(&req); err != nil { response.BadReq(c); return }
+	if err := h.svc.AssignMenus(c.Request.Context(), id, req.MenuIDs); err != nil { response.ErrResp(c, err); return }
+	response.OK(c, nil)
 }
 
 func (h *RoleHandler) parseHID(c *gin.Context, param string) (uint64, error) {
 	if h.hasher != nil {
 		id, err := h.hasher.Decode(c.Param(param))
 		if err != nil {
-			respondJSON(c, h.errs.ErrInvalidID.HTTP, h.errs.ErrInvalidID.Code, h.errs.ErrInvalidID.Message, nil)
+			response.AbortErr(c, h.errs.ErrInvalidID.Code)
 			return 0, err
 		}
 		return id, nil

@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 00:02:00
+// | @updated   2026-06-08 02:35:00
 // +----------------------------------------------------------------------
 
 package response
@@ -112,4 +113,83 @@ func (r *Renderer) Page(c *gin.Context, list any, total int64, page, pageSize in
 			"page_size": pageSize,
 		},
 	})
+}
+
+// ---------------------------------------------------------------------------
+// 便捷函数（T-004c 收口：handler/中间件统一调用入口）
+// ---------------------------------------------------------------------------
+
+// Coder 接口：任何带 GetCode() 的错误（errcode.Error 实现此接口）。
+// response 包不 import errcode — 通过此接口解耦。
+type Coder interface {
+	error
+	GetCode() int
+}
+
+// HandleError 从 error 提取 code → Registry Lookup → 渲染。
+// 未识别错误 → 500 internal error。handler 统一入口。
+func (r *Renderer) HandleError(c *gin.Context, err error) {
+	if coded, ok := err.(Coder); ok {
+		r.Fail(c, coded.GetCode())
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "message": "internal error"})
+}
+
+// AbortWithError 中间件版本：提取 code → Lookup → AbortWithStatusJSON。
+func (r *Renderer) AbortWithError(c *gin.Context, code int) {
+	spec, ok := r.registry.Lookup(code)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": code, "message": "unknown error"})
+		return
+	}
+	c.AbortWithStatusJSON(spec.HTTP, gin.H{"code": code, "message": r.msgFn(spec.I18nKey)})
+}
+
+// OK 成功响应便捷函数。
+func (r *Renderer) OK(c *gin.Context, data any) {
+	r.Success(c, data)
+}
+
+// Bad 请求参数错误。
+func (r *Renderer) Bad(c *gin.Context) {
+	c.JSON(http.StatusBadRequest, gin.H{"code": -1, "message": "invalid request"})
+}
+
+// ---------------------------------------------------------------------------
+// 包级便捷函数（渲染器初始化后全局可用）
+// ---------------------------------------------------------------------------
+
+var defaultRenderer *Renderer
+
+// SetDefault 设置全局默认渲染器（启动时调用一次）。
+func SetDefault(r *Renderer) { defaultRenderer = r }
+
+// ErrResp 从 error 提取 code → 渲染。handler 统一入口。
+func ErrResp(c *gin.Context, err error) {
+	if defaultRenderer != nil {
+		defaultRenderer.HandleError(c, err)
+		return
+	}
+	// 兜底（未初始化时）
+	c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "message": "internal error"})
+}
+
+// AbortErr 中间件版本。
+func AbortErr(c *gin.Context, code int) {
+	if defaultRenderer != nil {
+		defaultRenderer.AbortWithError(c, code)
+		return
+	}
+	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": code, "message": "unknown error"})
+}
+
+// OK 成功响应。
+func OK(c *gin.Context, data any) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": data})
+}
+
+// BadReq 请求参数错误。
+func BadReq(c *gin.Context) {
+	c.JSON(http.StatusBadRequest, gin.H{"code": -1, "message": "invalid request"})
 }

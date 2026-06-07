@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:20:00
+// | @updated   2026-06-08 02:40:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -13,6 +14,7 @@ import (
 
 	"github.com/benxin_dev/benxinadminpro-server/auth"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,22 +27,17 @@ func JWTAuth(tokenSvc auth.TokenService, errs *errcode.Registry) gin.HandlerFunc
 	return func(c *gin.Context) {
 		header := c.GetHeader("Authorization")
 		if len(header) <= 7 || !strings.EqualFold(header[:7], "bearer ") {
-			c.AbortWithStatusJSON(errs.ErrTokenInvalid.HTTP, gin.H{
-				"code": errs.ErrTokenInvalid.Code, "message": errs.ErrTokenInvalid.Message,
-			})
+			response.AbortErr(c, errs.ErrTokenInvalid.Code)
 			return
 		}
 		token := header[7:]
 
 		claims, err := tokenSvc.Verify(c.Request.Context(), token, auth.TokenTypeAccess)
 		if err != nil {
-			ecErr, ok := err.(errcode.Error)
-			if ok {
-				c.AbortWithStatusJSON(ecErr.HTTP, gin.H{"code": ecErr.Code, "message": ecErr.Message})
+			if coded, ok := err.(interface{ GetCode() int }); ok {
+				response.AbortErr(c, coded.GetCode())
 			} else {
-				c.AbortWithStatusJSON(errs.ErrTokenInvalid.HTTP, gin.H{
-					"code": errs.ErrTokenInvalid.Code, "message": errs.ErrTokenInvalid.Message,
-				})
+				response.AbortErr(c, errs.ErrTokenInvalid.Code)
 			}
 			return
 		}

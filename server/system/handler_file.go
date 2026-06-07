@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 01:25:00
+// | @updated   2026-06-08 02:40:00
 // +----------------------------------------------------------------------
 
 package system
@@ -14,6 +15,7 @@ import (
 	"strconv"
 
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -66,23 +68,23 @@ func (h *FileHandler) Upload(c *gin.Context) {
 		uploader,
 	)
 	if err != nil {
-		fail(c, err)
+		response.ErrResp(c, err)
 		return
 	}
-	ok(c, file)
+	response.OK(c, file)
 }
 
 // Download 鉴权流式下载。
 func (h *FileHandler) Download(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		bad(c)
+		response.BadReq(c)
 		return
 	}
 
 	file, reader, err := h.svc.Download(c.Request.Context(), id)
 	if err != nil {
-		fail(c, err)
+		response.ErrResp(c, err)
 		return
 	}
 	defer reader.Close()
@@ -105,21 +107,21 @@ func (h *FileHandler) List(c *gin.Context) {
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	uploader := c.Query("uploader")
 	list, total, _ := h.svc.List(c.Request.Context(), uploader, page, ps)
-	ok(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
+	response.OK(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
 }
 
 // Delete 删除文件。
 func (h *FileHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		bad(c)
+		response.BadReq(c)
 		return
 	}
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		fail(c, err)
+		response.ErrResp(c, err)
 		return
 	}
-	ok(c, nil)
+	response.OK(c, nil)
 }
 
 func getClaimsFromContext(c *gin.Context) string {
