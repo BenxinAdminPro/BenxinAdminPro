@@ -19,7 +19,20 @@ import (
 // 测试辅助
 // ---------------------------------------------------------------------------
 
+type testAuthEnv struct {
+	svc          AuthService
+	reg          *errcode.Registry
+	provider     *MemUserProvider
+	captchaStore *MemCaptchaStore
+}
+
 func setupAuthService(t *testing.T) (AuthService, *errcode.Registry, *MemUserProvider) {
+	t.Helper()
+	env := setupAuthEnv(t)
+	return env.svc, env.reg, env.provider
+}
+
+func setupAuthEnv(t *testing.T) testAuthEnv {
 	t.Helper()
 	reg, _ := errcode.NewRegistry(11000)
 
@@ -59,7 +72,7 @@ func setupAuthService(t *testing.T) (AuthService, *errcode.Registry, *MemUserPro
 	if err != nil {
 		t.Fatalf("NewAuthService: %v", err)
 	}
-	return svc, reg, provider
+	return testAuthEnv{svc: svc, reg: reg, provider: provider, captchaStore: captchaStore}
 }
 
 // ---------------------------------------------------------------------------
@@ -136,36 +149,38 @@ func TestLoginCaptchaInvalid(t *testing.T) {
 }
 
 func TestLoginLockout(t *testing.T) {
-	svc, _, _ := setupAuthService(t)
+	env := setupAuthEnv(t)
 	ctx := context.Background()
 
-	// 前 3 次失败（不需验证码）
+	// 前 3 次失败（不需验证码），累加到 captcha_threshold
 	for i := 0; i < 3; i++ {
-		svc.Login(ctx, LoginInput{Username: "alice", Password: "wrong"})
+		_, err := env.svc.Login(ctx, LoginInput{Username: "alice", Password: "wrong"})
+		assertErrCode(t, err, env.reg.ErrBadCredentials.Code)
 	}
 
-	// 第 4、5 次需带有效验证码才能通过验证码检查，继续累加失败
+	// 第 4、5 次需带有效验证码才能通过验证码门槛，继续让密码校验失败以累加计数
 	for i := 0; i < 2; i++ {
-		captcha, _ := svc.IssueCaptcha(ctx)
-		// 我们需要知道答案，但 CaptchaService 不暴露答案。
-		// 解决方案：直接在 store 中查或用已知答案。
-		// 由于 MemCaptchaStore 已删除答案，我们改为绕过：
-		// 不带验证码会被 ERR_CAPTCHA_REQUIRED 拦截，但实际失败计数已在前面累加。
-		// 真正的问题是：验证码检查在密码检查之前，所以验证码失败时不累加密码失败。
-		// 这是安全设计——必须通过验证码才能尝试密码。
-		// 所以我们需要一种方式让验证码通过。
-		_ = captcha
+		captcha, err := env.svc.IssueCaptcha(ctx)
+		if err != nil {
+			t.Fatalf("IssueCaptcha: %v", err)
+		}
+		// 从 MemCaptchaStore 偷看答案
+		answer := env.captchaStore.Peek("test:auth:captcha:" + captcha.CaptchaID)
+		if answer == "" {
+			t.Fatal("captcha answer should be in store")
+		}
+		// 带正确验证码 + 错误密码 → 通过验证码门槛，密码校验失败，计数累加
+		_, err = env.svc.Login(ctx, LoginInput{
+			Username: "alice", Password: "wrong",
+			CaptchaID: captcha.CaptchaID, CaptchaCode: answer,
+		})
+		assertErrCode(t, err, env.reg.ErrBadCredentials.Code)
 	}
 
-	// 改用更直接的方式：直接操作 lockoutStore 模拟失败
-	// 但这改变了测试意图。让我换个思路：
-	// 在 lockout 检查中，即使被 captcha_required 拦截，失败计数已由前3次的 handleFailure 推高。
-	// 第4次如果不带验证码就被 captcha_required 拦截，但此时计数仍是3（没有新增）。
-	// 所以要达到 lock_threshold=5，必须带有效验证码让密码校验环节执行（密码错→handleFailure→累加）。
-	// 唯一办法：让测试能拿到验证码答案。我们直接从 MemCaptchaStore 获取。
-
-	// 这个测试暂时不可行（需要访问验证码答案），改用 LockoutService 直接测试
-	t.Skip("lockout full path requires captcha answer access; tested via TestLockoutStateMachine")
+	// 累计 5 次失败，应已触发锁定
+	// 第 6 次请求应直接返回 ERR_ACCOUNT_LOCKED（不再走密码校验）
+	_, err := env.svc.Login(ctx, LoginInput{Username: "alice", Password: "correct-password"})
+	assertErrCode(t, err, env.reg.ErrAccountLocked.Code)
 }
 
 // TestLockoutStateMachine 直接测试 LockoutService 状态机。

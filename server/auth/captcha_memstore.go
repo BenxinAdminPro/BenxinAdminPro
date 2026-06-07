@@ -50,3 +50,14 @@ func (m *MemCaptchaStore) GetAndDelete(_ context.Context, key string) (string, e
 	}
 	return entry.answer, nil
 }
+
+// Peek 读取答案但不删除（仅供测试获取验证码答案）。
+func (m *MemCaptchaStore) Peek(key string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entry, ok := m.store[key]
+	if !ok || time.Now().After(entry.expAt) {
+		return ""
+	}
+	return entry.answer
+}

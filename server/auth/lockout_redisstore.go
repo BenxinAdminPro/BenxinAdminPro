@@ -57,14 +57,18 @@ func (s *RedisLockoutStore) GetFailCount(ctx context.Context, key string) (int, 
 	return count, nil
 }
 
+// IncrFail 递增失败计数。只在首次（count==1）设 TTL，实现固定窗口语义：
+// 窗口从第一次失败开始计时，不随后续失败续命。
 func (s *RedisLockoutStore) IncrFail(ctx context.Context, key string, ttl time.Duration) (int, error) {
-	pipe := s.client.TxPipeline()
-	incrCmd := pipe.Incr(ctx, key)
-	pipe.Expire(ctx, key, ttl)
-	if _, err := pipe.Exec(ctx); err != nil {
+	count, err := s.client.Incr(ctx, key).Result()
+	if err != nil {
 		return 0, err
 	}
-	return int(incrCmd.Val()), nil
+	// 仅首次 INCR（count==1）设置 TTL，后续 INCR 不重置
+	if count == 1 {
+		s.client.Expire(ctx, key, ttl)
+	}
+	return int(count), nil
 }
 
 func (s *RedisLockoutStore) ResetFail(ctx context.Context, key string) error {

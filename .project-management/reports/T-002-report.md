@@ -47,7 +47,8 @@
 
 ## 5. git 提交记录
 
-- 待本轮提交
+- **commit**: `2d6f6d0` — `feat(auth): T-002 认证授权 — 登录/刷新/登出 + 验证码 + 锁定 + Argon2id`
+- **双推**：待 daxing 确认后推送（push 前先征求确认）
 
 ## 6. 安全自查
 
@@ -68,8 +69,10 @@
 
 ## 8. 偏差与待办
 
-- TestLoginLockout 跳过（完整路径需验证码答案访问；锁定状态机由独立 TestLockoutStateMachine 覆盖）
-- 集成测试（`//go:build integration`）暂未新增 T-002 专用的（T-001 的 Redis 集成测试仍有效）；CaptchaRedisStore/LockoutRedisStore 可在真人验收时通过 demo 验证
+- LockoutRedisStore.IncrFail 修正为固定窗口：仅首次 INCR（count==1）设 TTL，后续不重置
+- TestLoginLockout 已补全完整路径（通过 MemCaptchaStore.Peek 获取答案，打通 "失败→验证码门槛→带正确验证码继续失败→锁定" 全程）
+- 验证码图片使用 Go 标准库 image/png 像素绘制，无外部 captcha 库/字体，无许可证风险
+- 新增 auth_integration_test.go（`//go:build integration`）：CaptchaRedisStore GetDel 一次性消费 + TTL；LockoutRedisStore 固定窗口 TTL 语义 + 锁定 TTL + 计数读写重置
 
 ## 9. 下一步建议
 
