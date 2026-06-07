@@ -85,7 +85,10 @@ rbac 单测使用 Casbin file adapter + 内存策略，不碰数据库。MySQL s
 
 ## 5. git 提交记录
 
-**卡点**：项目目录尚未 `git init`，无 remote 配置。需 daxing 提供 Gitee/GitHub 仓库 URL 后执行首次提交和双推。
+- **commit**: `fb121f2` — `feat(security): T-001 安全地基 — crypto 中间件 + JWT + Casbin + 跨语言向量`
+- **Gitee 主仓**: ✅ `git push -u origin main` 成功
+- **GitHub 镜像**: ✅ `git push -u github main` 成功（force 覆盖初始 commit）
+- **.gitignore 复核**: 通过 — `.claude/` / `config.yaml` / `*.local.yaml` / `.env` / `*.key` 均已排除
 
 ## 6. 安全自查
 
@@ -106,7 +109,7 @@ rbac 单测使用 Casbin file adapter + 内存策略，不碰数据库。MySQL s
 - [ ] 评审 `spec/rbac/model.conf` 与 `T001_casbin_rule.sql`
 - [ ] 本机 `docker compose -f deploy/docker-compose.dev.yml up -d` 后跑 `go test -tags=integration ./...` 全绿
 - [ ] 抽查文件头注释五项到秒
-- [ ] 提供 Gitee/GitHub 仓库 URL → 执行 git init + 首次提交 + 双推
+- [x] ~~提供 Gitee/GitHub 仓库 URL → 执行 git init + 首次提交 + 双推~~ 已完成
 
 ## 8. 偏差与待办
 

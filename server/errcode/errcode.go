@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:00:00
+// | @updated   2026-06-07 17:00:00
 // +----------------------------------------------------------------------
 
 package errcode
@@ -24,6 +25,13 @@ const (
 	OffsetTokenExpired           = 7
 	OffsetTokenRevoked           = 8
 	OffsetForbidden              = 9
+
+	// T-002 认证授权错误码 offset（20~29 段）
+	OffsetBadCredentials  = 20
+	OffsetCaptchaRequired = 21
+	OffsetCaptchaInvalid  = 22
+	OffsetAccountLocked   = 23
+	OffsetAccountDisabled = 24
 )
 
 // ---------------------------------------------------------------------------
@@ -40,6 +48,11 @@ var httpStatus = map[int]int{
 	OffsetTokenExpired:           401,
 	OffsetTokenRevoked:           401,
 	OffsetForbidden:              403,
+	OffsetBadCredentials:         401,
+	OffsetCaptchaRequired:        400,
+	OffsetCaptchaInvalid:         400,
+	OffsetAccountLocked:          423,
+	OffsetAccountDisabled:        403,
 }
 
 var i18nKeys = map[int]string{
@@ -52,6 +65,11 @@ var i18nKeys = map[int]string{
 	OffsetTokenExpired:           "security.token_expired",
 	OffsetTokenRevoked:           "security.token_revoked",
 	OffsetForbidden:              "security.forbidden",
+	OffsetBadCredentials:         "auth.bad_credentials",
+	OffsetCaptchaRequired:        "auth.captcha_required",
+	OffsetCaptchaInvalid:         "auth.captcha_invalid",
+	OffsetAccountLocked:          "auth.account_locked",
+	OffsetAccountDisabled:        "auth.account_disabled",
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +94,7 @@ func (e Error) Error() string {
 
 // Registry 持有当前应用实例化后的完整安全错误码集。
 type Registry struct {
+	// T-001 安全地基
 	ErrMissingSecurityHeaders Error
 	ErrTimestampExpired       Error
 	ErrSignInvalid            Error
@@ -85,6 +104,13 @@ type Registry struct {
 	ErrTokenExpired           Error
 	ErrTokenRevoked           Error
 	ErrForbidden              Error
+
+	// T-002 认证授权
+	ErrBadCredentials  Error
+	ErrCaptchaRequired Error
+	ErrCaptchaInvalid  Error
+	ErrAccountLocked   Error
+	ErrAccountDisabled Error
 }
 
 // NewRegistry 用配置注入的 segmentBase 构建错误码注册表。
@@ -103,6 +129,11 @@ func NewRegistry(segmentBase int) (*Registry, error) {
 		ErrTokenExpired:           newErr(segmentBase, OffsetTokenExpired),
 		ErrTokenRevoked:           newErr(segmentBase, OffsetTokenRevoked),
 		ErrForbidden:              newErr(segmentBase, OffsetForbidden),
+		ErrBadCredentials:         newErr(segmentBase, OffsetBadCredentials),
+		ErrCaptchaRequired:        newErr(segmentBase, OffsetCaptchaRequired),
+		ErrCaptchaInvalid:         newErr(segmentBase, OffsetCaptchaInvalid),
+		ErrAccountLocked:          newErr(segmentBase, OffsetAccountLocked),
+		ErrAccountDisabled:        newErr(segmentBase, OffsetAccountDisabled),
 	}, nil
 }
 

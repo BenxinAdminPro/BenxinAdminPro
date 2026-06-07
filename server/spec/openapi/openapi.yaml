@@ -1,9 +1,10 @@
 # +----------------------------------------------------------------------
 # | @project   本心通用管理后台 / BenxinAdminPro
-# | @mission   OpenAPI 3.0 规范 v0.1.0 — 安全头 + 加密信封 + 错误码段
+# | @mission   OpenAPI 3.0 规范 v0.2.0 — 安全头 + 加密信封 + 认证接口
 # | @author    仗键天涯(daxing)
 # | @email     3442535897@qq.com
 # | @date      2026-06-07 14:19:00
+# | @updated   2026-06-07 17:30:00
 # +----------------------------------------------------------------------
 
 openapi: "3.0.3"
@@ -12,9 +13,9 @@ info:
   title: BenxinAdminPro API
   description: |
     本心通用管理后台底座 API 规范。
-    本文件定义安全头、C 端加密信封格式和统一安全错误码段。
-    具体业务路径留空，后续切片增量补充。
-  version: "0.1.0"
+    v0.1.0: 安全头、C 端加密信封格式和统一安全错误码段。
+    v0.2.0: 认证接口（登录/刷新/登出/验证码）。
+  version: "0.2.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -24,9 +25,15 @@ servers:
     description: 本地开发
 
 # ---------------------------------------------------------------------------
-# 安全头参数定义
+# 安全定义
 # ---------------------------------------------------------------------------
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   parameters:
     X-Ca-Timestamp:
       name: X-Ca-Timestamp
@@ -56,49 +63,103 @@ components:
       schema:
         type: string
 
-  # ---------------------------------------------------------------------------
-  # Schema 定义
-  # ---------------------------------------------------------------------------
   schemas:
+    # --- T-001 安全信封 ---
     EncryptedEnvelope:
       type: object
-      required:
-        - data
+      required: [data]
       properties:
         data:
           type: string
           description: base64(IV(16B) || AES-256-CBC-PKCS7(plaintext))
-          example: "ABEiM0RVZneImaq7zN3u/0BAQEBAQEBAQEBAQEBAQEBA..."
 
     SecurityError:
       type: object
-      required:
-        - code
-        - message
+      required: [code, message]
       properties:
         code:
           type: integer
           description: |
             逻辑错误码 = security_segment_base + offset。
-            offset 定义：
-              +1 missing_headers (400)
-              +2 timestamp_expired (400)
-              +3 sign_invalid (400)
-              +4 nonce_replay (400)
-              +5 decrypt_failed (400)
-              +6 token_invalid (401)
-              +7 token_expired (401)
-              +8 token_revoked (401)
-              +9 forbidden (403)
+            T-001 offset: +1~+9 (security)
+            T-002 offset: +20~+24 (auth)
           example: 11001
         message:
           type: string
-          description: i18n key，如 "security.missing_headers"
+          description: i18n key
           example: "security.missing_headers"
 
-  # ---------------------------------------------------------------------------
-  # 响应定义
-  # ---------------------------------------------------------------------------
+    # --- T-002 认证 ---
+    ApiResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          description: 0=成功，其它=错误码
+        message:
+          type: string
+        data:
+          description: 业务数据
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        captcha_id:
+          type: string
+          description: 失败达阈值后必填
+        captcha_code:
+          type: string
+          description: 失败达阈值后必填
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        access_exp:
+          type: integer
+          format: int64
+        refresh_exp:
+          type: integer
+          format: int64
+        token_type:
+          type: string
+          example: Bearer
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    LogoutRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: 可选，同时拉黑 refresh
+
+    CaptchaResponse:
+      type: object
+      properties:
+        captcha_id:
+          type: string
+        image_base64:
+          type: string
+          description: data:image/png;base64,...
+        expires_in:
+          type: integer
+          description: 秒
+
   responses:
     EncryptedResponse:
       description: C 端加密响应
@@ -125,6 +186,130 @@ components:
             $ref: "#/components/schemas/SecurityError"
 
 # ---------------------------------------------------------------------------
-# 路径（占位，后续切片增量补充）
+# 路径
 # ---------------------------------------------------------------------------
-paths: {}
+paths:
+  /auth/captcha:
+    post:
+      tags: [Auth]
+      summary: 获取图形验证码
+      operationId: issueCaptcha
+      security: []
+      responses:
+        "200":
+          description: 验证码
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CaptchaResponse"
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: 登录
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: 验证码相关错误 (captcha_required / captcha_invalid)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityError"
+        "401":
+          description: 认证失败 (bad_credentials)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityError"
+        "403":
+          description: 账号禁用
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityError"
+        "423":
+          description: 账号锁定
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityError"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: 刷新令牌
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: 令牌无效/过期/已吊销
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityError"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: 登出
+      operationId: logout
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+      responses:
+        "200":
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "401":
+          description: 未认证
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityError"
