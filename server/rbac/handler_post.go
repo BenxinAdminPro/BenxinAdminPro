@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:25:00
 // | @updated   2026-06-07 21:30:00
+// | @updated   2026-06-07 22:50:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -27,10 +28,15 @@ type PostHandler struct {
 	svc    *PostService
 	errs   *errcode.Registry
 	hasher *Hasher
+	enc    *ResponseEncoder
 }
 
 func NewPostHandler(svc *PostService, errs *errcode.Registry, hasher *Hasher) *PostHandler {
-	return &PostHandler{svc: svc, errs: errs, hasher: hasher}
+	var enc *ResponseEncoder
+	if hasher != nil {
+		enc = NewResponseEncoder(hasher)
+	}
+	return &PostHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
 }
 
 func (h *PostHandler) RegisterRoutes(rg *gin.RouterGroup) {
@@ -45,7 +51,7 @@ func (h *PostHandler) List(c *gin.Context) {
 	c.ShouldBindQuery(&q)
 	result, err := h.svc.List(c.Request.Context(), q)
 	if err != nil { respondError(c, err); return }
-	respondOK(c, result)
+	if h.enc != nil { respondOK(c, h.enc.PostList(result)) } else { respondOK(c, result) }
 }
 
 func (h *PostHandler) Create(c *gin.Context) {
@@ -53,7 +59,7 @@ func (h *PostHandler) Create(c *gin.Context) {
 	if err := c.ShouldBindJSON(&in); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
 	post, err := h.svc.Create(c.Request.Context(), in)
 	if err != nil { respondError(c, err); return }
-	respondOK(c, post)
+	if h.enc != nil { respondOK(c, h.enc.Post(post)) } else { respondOK(c, post) }
 }
 
 func (h *PostHandler) Update(c *gin.Context) {

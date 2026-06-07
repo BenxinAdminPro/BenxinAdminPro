@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:10:00
+// | @updated   2026-06-07 23:00:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -119,35 +120,47 @@ func (s *RoleService) Delete(ctx context.Context, id uint64) error {
 }
 
 // AssignMenus 给角色分配菜单/权限，并联动 Casbin policy。
+// 一致性策略：先计算新 permCodes，DB 授权表写入在事务中，
+// SavePolicy 失败则回滚 DB 事务 + ReloadAll 恢复 enforcer 内存。
 func (s *RoleService) AssignMenus(ctx context.Context, roleID uint64, menuIDs []uint64) error {
 	var role SysRole
 	if err := s.db.WithContext(ctx).First(&role, roleID).Error; err != nil {
 		return s.errs.ErrRoleCodeExists
 	}
 
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		tx.Where("role_id = ?", roleID).Delete(&SysRoleMenu{})
-		if len(menuIDs) > 0 {
-			var rms []SysRoleMenu
-			for _, mid := range menuIDs {
-				rms = append(rms, SysRoleMenu{RoleID: roleID, MenuID: mid})
-			}
-			if err := tx.Create(&rms).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return err
+	// 提前计算新的 permCodes（从 menu 表读，不依赖事务内写入）
+	var permCodes []string
+	if len(menuIDs) > 0 {
+		s.db.WithContext(ctx).Model(&SysMenu{}).
+			Where("id IN ? AND perm_code != ''", menuIDs).
+			Pluck("perm_code", &permCodes)
 	}
 
-	// 联动 Casbin：从 role_menu + menu 表取 perm_code 列表
-	if s.policySync != nil {
-		permCodes := s.getRolePermCodes(ctx, roleID)
-		return s.policySync.SyncRolePerms(ctx, role.Code, permCodes)
+	// DB 事务写入授权表
+	tx := s.db.WithContext(ctx).Begin()
+	tx.Where("role_id = ?", roleID).Delete(&SysRoleMenu{})
+	if len(menuIDs) > 0 {
+		var rms []SysRoleMenu
+		for _, mid := range menuIDs {
+			rms = append(rms, SysRoleMenu{RoleID: roleID, MenuID: mid})
+		}
+		if err := tx.Create(&rms).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("rbac: assign menus: %w", err)
+		}
 	}
-	return nil
+
+	// 联动 Casbin
+	if s.policySync != nil {
+		if err := s.policySync.SyncRolePerms(ctx, role.Code, permCodes); err != nil {
+			tx.Rollback()
+			// SavePolicy 失败，回滚 DB + 恢复 enforcer 内存
+			s.policySync.ReloadAll(ctx)
+			return fmt.Errorf("rbac: sync casbin failed, rolled back: %w", err)
+		}
+	}
+
+	return tx.Commit().Error
 }
 
 func (s *RoleService) getRolePermCodes(ctx context.Context, roleID uint64) []string {

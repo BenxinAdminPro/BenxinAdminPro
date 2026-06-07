@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:24:00
+// | @updated   2026-06-07 22:50:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -19,10 +20,15 @@ type MenuHandler struct {
 	svc    *MenuService
 	errs   *errcode.Registry
 	hasher *Hasher
+	enc    *ResponseEncoder
 }
 
 func NewMenuHandler(svc *MenuService, errs *errcode.Registry, hasher *Hasher) *MenuHandler {
-	return &MenuHandler{svc: svc, errs: errs, hasher: hasher}
+	var enc *ResponseEncoder
+	if hasher != nil {
+		enc = NewResponseEncoder(hasher)
+	}
+	return &MenuHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
 }
 
 func (h *MenuHandler) RegisterRoutes(rg *gin.RouterGroup) {
@@ -35,7 +41,7 @@ func (h *MenuHandler) RegisterRoutes(rg *gin.RouterGroup) {
 func (h *MenuHandler) Tree(c *gin.Context) {
 	tree, err := h.svc.Tree(c.Request.Context())
 	if err != nil { respondError(c, err); return }
-	respondOK(c, tree)
+	if h.enc != nil { respondOK(c, h.enc.MenuTree(tree)) } else { respondOK(c, tree) }
 }
 
 func (h *MenuHandler) Create(c *gin.Context) {
@@ -43,7 +49,7 @@ func (h *MenuHandler) Create(c *gin.Context) {
 	if err := c.ShouldBindJSON(&in); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
 	menu, err := h.svc.Create(c.Request.Context(), in)
 	if err != nil { respondError(c, err); return }
-	respondOK(c, menu)
+	if h.enc != nil { respondOK(c, h.enc.Menu(menu)) } else { respondOK(c, menu) }
 }
 
 func (h *MenuHandler) Update(c *gin.Context) {

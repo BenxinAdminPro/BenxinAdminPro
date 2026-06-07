@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:24:00
 // | @updated   2026-06-07 21:30:00
+// | @updated   2026-06-07 22:50:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -27,10 +28,15 @@ type DeptHandler struct {
 	svc    *DeptService
 	errs   *errcode.Registry
 	hasher *Hasher
+	enc    *ResponseEncoder
 }
 
 func NewDeptHandler(svc *DeptService, errs *errcode.Registry, hasher *Hasher) *DeptHandler {
-	return &DeptHandler{svc: svc, errs: errs, hasher: hasher}
+	var enc *ResponseEncoder
+	if hasher != nil {
+		enc = NewResponseEncoder(hasher)
+	}
+	return &DeptHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
 }
 
 func (h *DeptHandler) RegisterRoutes(rg *gin.RouterGroup) {
@@ -43,7 +49,7 @@ func (h *DeptHandler) RegisterRoutes(rg *gin.RouterGroup) {
 func (h *DeptHandler) Tree(c *gin.Context) {
 	tree, err := h.svc.Tree(c.Request.Context())
 	if err != nil { respondError(c, err); return }
-	respondOK(c, tree)
+	if h.enc != nil { respondOK(c, h.enc.DeptTree(tree)) } else { respondOK(c, tree) }
 }
 
 func (h *DeptHandler) Create(c *gin.Context) {
@@ -51,7 +57,7 @@ func (h *DeptHandler) Create(c *gin.Context) {
 	if err := c.ShouldBindJSON(&in); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
 	dept, err := h.svc.Create(c.Request.Context(), in)
 	if err != nil { respondError(c, err); return }
-	respondOK(c, dept)
+	if h.enc != nil { respondOK(c, h.enc.Dept(dept)) } else { respondOK(c, dept) }
 }
 
 func (h *DeptHandler) Update(c *gin.Context) {

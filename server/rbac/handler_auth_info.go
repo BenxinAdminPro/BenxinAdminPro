@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:25:00
+// | @updated   2026-06-07 22:50:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -18,11 +19,16 @@ import (
 type AuthInfoHandler struct {
 	menuSvc *MenuService
 	userSvc *UserService
+	enc     *ResponseEncoder
 }
 
 // NewAuthInfoHandler 创建权限下发 handler。
-func NewAuthInfoHandler(menuSvc *MenuService, userSvc *UserService) *AuthInfoHandler {
-	return &AuthInfoHandler{menuSvc: menuSvc, userSvc: userSvc}
+func NewAuthInfoHandler(menuSvc *MenuService, userSvc *UserService, hasher *Hasher) *AuthInfoHandler {
+	var enc *ResponseEncoder
+	if hasher != nil {
+		enc = NewResponseEncoder(hasher)
+	}
+	return &AuthInfoHandler{menuSvc: menuSvc, userSvc: userSvc, enc: enc}
 }
 
 // RegisterRoutes 注册权限下发路由（需 JWT 鉴权，无需额外权限码）。
@@ -43,7 +49,7 @@ func (h *AuthInfoHandler) Menus(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
-	respondOK(c, tree)
+	if h.enc != nil { respondOK(c, h.enc.MenuTree(tree)) } else { respondOK(c, tree) }
 }
 
 // Perms 返回当前用户权限码集合。

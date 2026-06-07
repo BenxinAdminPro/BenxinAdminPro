@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:22:00
+// | @updated   2026-06-07 22:50:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -19,10 +20,15 @@ type RoleHandler struct {
 	svc    *RoleService
 	errs   *errcode.Registry
 	hasher *Hasher
+	enc    *ResponseEncoder
 }
 
 func NewRoleHandler(svc *RoleService, errs *errcode.Registry, hasher *Hasher) *RoleHandler {
-	return &RoleHandler{svc: svc, errs: errs, hasher: hasher}
+	var enc *ResponseEncoder
+	if hasher != nil {
+		enc = NewResponseEncoder(hasher)
+	}
+	return &RoleHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
 }
 
 func (h *RoleHandler) RegisterRoutes(rg *gin.RouterGroup) {
@@ -39,7 +45,7 @@ func (h *RoleHandler) List(c *gin.Context) {
 	c.ShouldBindQuery(&q)
 	result, err := h.svc.List(c.Request.Context(), q)
 	if err != nil { respondError(c, err); return }
-	respondOK(c, result)
+	if h.enc != nil { respondOK(c, h.enc.RoleList(result)) } else { respondOK(c, result) }
 }
 
 func (h *RoleHandler) Create(c *gin.Context) {
@@ -47,7 +53,7 @@ func (h *RoleHandler) Create(c *gin.Context) {
 	if err := c.ShouldBindJSON(&in); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
 	role, err := h.svc.Create(c.Request.Context(), in)
 	if err != nil { respondError(c, err); return }
-	respondOK(c, role)
+	if h.enc != nil { respondOK(c, h.enc.Role(role)) } else { respondOK(c, role) }
 }
 
 func (h *RoleHandler) Get(c *gin.Context) {
@@ -55,7 +61,7 @@ func (h *RoleHandler) Get(c *gin.Context) {
 	if err != nil { return }
 	role, err := h.svc.Get(c.Request.Context(), id)
 	if err != nil { respondError(c, err); return }
-	respondOK(c, role)
+	if h.enc != nil { respondOK(c, h.enc.Role(role)) } else { respondOK(c, role) }
 }
 
 func (h *RoleHandler) Update(c *gin.Context) {

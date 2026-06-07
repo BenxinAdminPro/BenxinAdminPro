@@ -4,7 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:22:00
-// | @updated   2026-06-07 21:28:00
+// | @updated   2026-06-07 22:35:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -34,11 +34,16 @@ type UserHandler struct {
 	svc    *UserService
 	errs   *errcode.Registry
 	hasher *Hasher
+	enc    *ResponseEncoder
 }
 
 // NewUserHandler 创建用户 handler。
 func NewUserHandler(svc *UserService, errs *errcode.Registry, hasher *Hasher) *UserHandler {
-	return &UserHandler{svc: svc, errs: errs, hasher: hasher}
+	var enc *ResponseEncoder
+	if hasher != nil {
+		enc = NewResponseEncoder(hasher)
+	}
+	return &UserHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
 }
 
 // RegisterRoutes 注册用户路由（全部挂 RequirePerm）。
@@ -64,7 +69,11 @@ func (h *UserHandler) List(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
-	respondOK(c, result)
+	if h.enc != nil {
+		respondOK(c, h.enc.UserList(result))
+	} else {
+		respondOK(c, result)
+	}
 }
 
 func (h *UserHandler) Create(c *gin.Context) {
@@ -78,7 +87,11 @@ func (h *UserHandler) Create(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
-	respondOK(c, user)
+	if h.enc != nil {
+		respondOK(c, h.enc.User(user))
+	} else {
+		respondOK(c, user)
+	}
 }
 
 func (h *UserHandler) Get(c *gin.Context) {
@@ -91,7 +104,11 @@ func (h *UserHandler) Get(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
-	respondOK(c, user)
+	if h.enc != nil {
+		respondOK(c, h.enc.User(user))
+	} else {
+		respondOK(c, user)
+	}
 }
 
 func (h *UserHandler) Update(c *gin.Context) {

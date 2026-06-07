@@ -258,33 +258,39 @@ func (s *UserService) SetStatus(ctx context.Context, id uint64, status int8) err
 }
 
 // AssignRoles 给用户分配角色，并联动 Casbin g 规则。
+// 一致性策略：SavePolicy 失败则回滚 DB 事务 + ReloadAll 恢复 enforcer。
 func (s *UserService) AssignRoles(ctx context.Context, userID uint64, roleIDs []uint64) error {
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		tx.Where("user_id = ?", userID).Delete(&SysUserRole{})
-		if len(roleIDs) > 0 {
-			var urs []SysUserRole
-			for _, rid := range roleIDs {
-				urs = append(urs, SysUserRole{UserID: userID, RoleID: rid})
-			}
-			return tx.Create(&urs).Error
+	// 提前计算 roleCodes
+	var roleCodes []string
+	if len(roleIDs) > 0 {
+		s.db.WithContext(ctx).Model(&SysRole{}).Where("id IN ?", roleIDs).Pluck("code", &roleCodes)
+	}
+
+	// DB 事务写入
+	tx := s.db.WithContext(ctx).Begin()
+	tx.Where("user_id = ?", userID).Delete(&SysUserRole{})
+	if len(roleIDs) > 0 {
+		var urs []SysUserRole
+		for _, rid := range roleIDs {
+			urs = append(urs, SysUserRole{UserID: userID, RoleID: rid})
 		}
-		return nil
-	})
-	if err != nil {
-		return err
+		if err := tx.Create(&urs).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("rbac: assign roles: %w", err)
+		}
 	}
 
 	// 联动 Casbin g 规则
 	if s.policySync != nil {
-		var roleCodes []string
-		s.db.WithContext(ctx).Model(&SysRole{}).
-			Joins("JOIN "+s.userRoleTable()+" ON "+s.userRoleTable()+".role_id = "+s.roleTable()+".id").
-			Where(s.userRoleTable()+".user_id = ?", userID).
-			Pluck(s.roleTable()+".code", &roleCodes)
 		userSub := fmt.Sprintf("%d", userID)
-		return s.policySync.SyncUserRoles(ctx, userSub, roleCodes)
+		if err := s.policySync.SyncUserRoles(ctx, userSub, roleCodes); err != nil {
+			tx.Rollback()
+			s.policySync.ReloadAll(ctx)
+			return fmt.Errorf("rbac: sync casbin failed, rolled back: %w", err)
+		}
 	}
-	return nil
+
+	return tx.Commit().Error
 }
 
 func (s *UserService) userRoleTable() string {
