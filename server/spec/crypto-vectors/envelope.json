@@ -1,0 +1,58 @@
+[
+  {
+    "name": "post_json",
+    "aes_key_b64": "ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8=",
+    "hmac_key_b64": "/ty6mHZUMhD+3LqYdlQyEP7cuph2VDIQ/ty6mHZUMhA=",
+    "iv_hex": "00112233445566778899aabbccddeeff",
+    "method": "POST",
+    "path": "/api/c/echo",
+    "timestamp": "1750000000",
+    "nonce": "abc123nonce",
+    "plaintext_utf8": "{\"msg\":\"hi\"}",
+    "expected_body_b64": "ABEiM0RVZneImaq7zN3u//V/ZuwYphEMTj0t4pE1xto=",
+    "expected_signing_string": "POST\n/api/c/echo\n1750000000\nabc123nonce\nABEiM0RVZneImaq7zN3u//V/ZuwYphEMTj0t4pE1xto=",
+    "expected_signature_b64": "voURmmYj46rOoj1j/Q3JfaO9TkeNfq1nlPFhUIE6TLU="
+  },
+  {
+    "name": "put_chinese",
+    "aes_key_b64": "ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8=",
+    "hmac_key_b64": "/ty6mHZUMhD+3LqYdlQyEP7cuph2VDIQ/ty6mHZUMhA=",
+    "iv_hex": "00112233445566778899aabbccddeeff",
+    "method": "PUT",
+    "path": "/api/c/config",
+    "timestamp": "1750001000",
+    "nonce": "nonce_zh_cn_001",
+    "plaintext_utf8": "{\"name\":\"本心管理后台\",\"version\":\"1.0\"}",
+    "expected_body_b64": "ABEiM0RVZneImaq7zN3u/1nicmWOhyZ62LK7D25sbA5CzdwYNm/5U3txkW4uLCqTaXeaYAcOXmwfPJzredfTbw==",
+    "expected_signing_string": "PUT\n/api/c/config\n1750001000\nnonce_zh_cn_001\nABEiM0RVZneImaq7zN3u/1nicmWOhyZ62LK7D25sbA5CzdwYNm/5U3txkW4uLCqTaXeaYAcOXmwfPJzredfTbw==",
+    "expected_signature_b64": "ARnqr0l6LMFwEqVRaMm6+ZNWXwo7iTJ/738o052v++4="
+  },
+  {
+    "name": "delete_empty_body",
+    "aes_key_b64": "ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8=",
+    "hmac_key_b64": "/ty6mHZUMhD+3LqYdlQyEP7cuph2VDIQ/ty6mHZUMhA=",
+    "iv_hex": "00112233445566778899aabbccddeeff",
+    "method": "DELETE",
+    "path": "/api/c/item/42",
+    "timestamp": "1750002000",
+    "nonce": "nonce_empty_body",
+    "plaintext_utf8": "",
+    "expected_body_b64": "ABEiM0RVZneImaq7zN3u/0zAmQ61s7Ywz+9Pt6tucpA=",
+    "expected_signing_string": "DELETE\n/api/c/item/42\n1750002000\nnonce_empty_body\nABEiM0RVZneImaq7zN3u/0zAmQ61s7Ywz+9Pt6tucpA=",
+    "expected_signature_b64": "AS3ye1BQY9DZ71MfBHeE/zWYOI3gMf+eqo4uGrc75ZI="
+  },
+  {
+    "name": "get_method_case",
+    "aes_key_b64": "ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8=",
+    "hmac_key_b64": "/ty6mHZUMhD+3LqYdlQyEP7cuph2VDIQ/ty6mHZUMhA=",
+    "iv_hex": "00112233445566778899aabbccddeeff",
+    "method": "get",
+    "path": "/api/c/search",
+    "timestamp": "1750003000",
+    "nonce": "nonce_get_test",
+    "plaintext_utf8": "{\"q\":\"search\"}",
+    "expected_body_b64": "ABEiM0RVZneImaq7zN3u/x8dBQFslRIfcL7MT++8C8o=",
+    "expected_signing_string": "GET\n/api/c/search\n1750003000\nnonce_get_test\nABEiM0RVZneImaq7zN3u/x8dBQFslRIfcL7MT++8C8o=",
+    "expected_signature_b64": "9NzI15aKOmu8iDK8V4izAZdmsJL+YnG33tJO75AjbVs="
+  }
+]

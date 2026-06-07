@@ -1,0 +1,43 @@
+# +----------------------------------------------------------------------
+# | @project   本心通用管理后台 / BenxinAdminPro
+# | @mission   配置示例文件 — 占位说明，不含真实密钥
+# | @author    仗键天涯(daxing)
+# | @email     3442535897@qq.com
+# | @date      2026-06-07 14:16:00
+# +----------------------------------------------------------------------
+#
+# 复制此文件为 config.yaml 并填入真实值。
+# 禁止将真实密钥提交到 git 仓库。
+#
+# 密钥生成示例（32 字节 base64）：
+#   openssl rand -base64 32
+
+app:
+  table_prefix: ""         # 消费方注入，如 "kp_"
+  redis_key_prefix: ""     # 消费方注入，如 "okp"
+
+errcode:
+  security_segment_base: 11000  # 安全模块错误码段基址
+
+crypto:
+  header_prefix: "X-Ca-"
+  aes_key_b64: ""               # openssl rand -base64 32 → 解码须恰好 32 字节
+  hmac_key_b64: ""              # openssl rand -base64 32 → 建议 32 字节
+  replay_window_seconds: 300
+  nonce_ttl_seconds: 600
+
+jwt:
+  issuer: ""                    # 如 "benxinadminpro"
+  access_secret: ""             # 强随机字符串
+  refresh_secret: ""            # 强随机字符串，建议与 access_secret 不同
+  access_ttl_seconds: 7200      # 2 小时
+  refresh_ttl_seconds: 604800   # 7 天
+  refresh_rotate: true
+
+redis:
+  addr: "localhost:6379"
+  db: 0
+  password: ""
+
+mysql:
+  dsn: "root:root@tcp(localhost:3306)/benxinadminpro?charset=utf8mb4&parseTime=true&loc=Local"

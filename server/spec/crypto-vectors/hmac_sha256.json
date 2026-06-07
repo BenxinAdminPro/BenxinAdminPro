@@ -1,0 +1,45 @@
+[
+  {
+    "name": "rfc4231_test1",
+    "hmac_key_b64": "CwsLCwsLCwsLCwsLCwsLCwsLCws=",
+    "hmac_key_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+    "message_utf8": "Hi There",
+    "signature_b64": "sDRMYdjbOFNcqK/OrwvxK4gdwgDJgz2nJuk3bC4yz/c=",
+    "signature_hex": "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
+  },
+  {
+    "name": "rfc4231_test2",
+    "hmac_key_b64": "SmVmZQ==",
+    "hmac_key_hex": "4a656665",
+    "message_utf8": "what do ya want for nothing?",
+    "signature_b64": "W9zBRr9gdU5qBCQmCJV1x1oAPwidJzmDnexYuWTsOEM=",
+    "signature_hex": "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+  },
+  {
+    "name": "rfc4231_test3",
+    "hmac_key_b64": "qqqqqqqqqqqqqqqqqqqqqqqqqqo=",
+    "hmac_key_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "message_utf8": "",
+    "message_hex": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "signature_b64": "67CK88NBvz9wxRjk1RSTXX1NmDoSr2v4cXTVsn069EY=",
+    "signature_hex": "ebb08af3c341bf3f70c518e4d514935d7d4d983a12af6bf87174d5b27d3af446"
+  },
+  {
+    "name": "custom_basic",
+    "hmac_key_b64": "ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8=",
+    "message_utf8": "abc",
+    "signature_b64": "zdSB1j1k29qtKhPdKk3uoiAuCS0e+akeKgIBWh7SJ+4="
+  },
+  {
+    "name": "custom_chinese",
+    "hmac_key_b64": "ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8=",
+    "message_utf8": "你好世界",
+    "signature_b64": "xYCaznBOiVplL/G3yXVwH50VP7wJOh5QhezFPECRMdQ="
+  },
+  {
+    "name": "custom_empty",
+    "hmac_key_b64": "ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8=",
+    "message_utf8": "",
+    "signature_b64": "x7XhLsApqIcCKrvcZI+DgNsvQeRCIOwVMFU8JNgdL+4="
+  }
+]

@@ -1,0 +1,39 @@
+[
+  {
+    "name": "nist_sp800_38a_f25_block1",
+    "aes_key_b64": "YD3rEBXKcb4rc67whX13gR81LAc7YQjXLZgQowkU3/Q=",
+    "iv_hex": "000102030405060708090a0b0c0d0e0f",
+    "plaintext_utf8": "",
+    "plaintext_hex": "6bc1bee22e409f96e93d7e117393172a",
+    "ciphertext_b64": "9YxMBNbl8bp3nqv7X3v71g=="
+  },
+  {
+    "name": "nist_sp800_38a_f25_4blocks",
+    "aes_key_b64": "YD3rEBXKcb4rc67whX13gR81LAc7YQjXLZgQowkU3/Q=",
+    "iv_hex": "000102030405060708090a0b0c0d0e0f",
+    "plaintext_utf8": "",
+    "plaintext_hex": "6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e5130c81c46a35ce411e5fbc1191a0a52eff69f2445df4f9b17ad2b417be66c3710",
+    "ciphertext_b64": "9YxMBNbl8bp3nqv7X3v71pz8TpZ+24CNZ593e8ZwLH058jNpqdm6z6Uw4mMEIxRhsusF4sOb6fzabBkHjGqdGw=="
+  },
+  {
+    "name": "ascii_short",
+    "aes_key_b64": "ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8=",
+    "iv_hex": "00112233445566778899aabbccddeeff",
+    "plaintext_utf8": "hello-benxin",
+    "ciphertext_b64": "Uy40b12lm+L/knRvBlmQ1A=="
+  },
+  {
+    "name": "chinese_multibyte",
+    "aes_key_b64": "ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8=",
+    "iv_hex": "00112233445566778899aabbccddeeff",
+    "plaintext_utf8": "你好，本心",
+    "ciphertext_b64": "2ND7V+IFBN4wufP6BW+5Xg=="
+  },
+  {
+    "name": "empty_body",
+    "aes_key_b64": "ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8=",
+    "iv_hex": "00112233445566778899aabbccddeeff",
+    "plaintext_utf8": "",
+    "ciphertext_b64": "TMCZDrWztjDP70+3q25ykA=="
+  }
+]

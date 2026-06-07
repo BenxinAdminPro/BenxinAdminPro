@@ -1,0 +1,130 @@
+# +----------------------------------------------------------------------
+# | @project   本心通用管理后台 / BenxinAdminPro
+# | @mission   OpenAPI 3.0 规范 v0.1.0 — 安全头 + 加密信封 + 错误码段
+# | @author    仗键天涯(daxing)
+# | @email     3442535897@qq.com
+# | @date      2026-06-07 14:19:00
+# +----------------------------------------------------------------------
+
+openapi: "3.0.3"
+
+info:
+  title: BenxinAdminPro API
+  description: |
+    本心通用管理后台底座 API 规范。
+    本文件定义安全头、C 端加密信封格式和统一安全错误码段。
+    具体业务路径留空，后续切片增量补充。
+  version: "0.1.0"
+  contact:
+    name: 仗键天涯(daxing)
+    email: 3442535897@qq.com
+
+servers:
+  - url: http://localhost:8080
+    description: 本地开发
+
+# ---------------------------------------------------------------------------
+# 安全头参数定义
+# ---------------------------------------------------------------------------
+components:
+  parameters:
+    X-Ca-Timestamp:
+      name: X-Ca-Timestamp
+      in: header
+      required: true
+      description: Unix 秒时间戳（字符串）
+      schema:
+        type: string
+        example: "1750000000"
+
+    X-Ca-Nonce:
+      name: X-Ca-Nonce
+      in: header
+      required: true
+      description: 客户端随机串，建议 16-32 位 [A-Za-z0-9]
+      schema:
+        type: string
+        example: "abc123nonce456def"
+
+    X-Ca-Signature:
+      name: X-Ca-Signature
+      in: header
+      required: true
+      description: |
+        base64(HMAC-SHA256(hmac_key, SIGNING_STRING))
+        SIGNING_STRING = UPPER(method) \n path \n timestamp \n nonce \n BODY_B64
+      schema:
+        type: string
+
+  # ---------------------------------------------------------------------------
+  # Schema 定义
+  # ---------------------------------------------------------------------------
+  schemas:
+    EncryptedEnvelope:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: string
+          description: base64(IV(16B) || AES-256-CBC-PKCS7(plaintext))
+          example: "ABEiM0RVZneImaq7zN3u/0BAQEBAQEBAQEBAQEBAQEBA..."
+
+    SecurityError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: |
+            逻辑错误码 = security_segment_base + offset。
+            offset 定义：
+              +1 missing_headers (400)
+              +2 timestamp_expired (400)
+              +3 sign_invalid (400)
+              +4 nonce_replay (400)
+              +5 decrypt_failed (400)
+              +6 token_invalid (401)
+              +7 token_expired (401)
+              +8 token_revoked (401)
+              +9 forbidden (403)
+          example: 11001
+        message:
+          type: string
+          description: i18n key，如 "security.missing_headers"
+          example: "security.missing_headers"
+
+  # ---------------------------------------------------------------------------
+  # 响应定义
+  # ---------------------------------------------------------------------------
+  responses:
+    EncryptedResponse:
+      description: C 端加密响应
+      headers:
+        X-Ca-Timestamp:
+          schema:
+            type: string
+        X-Ca-Nonce:
+          schema:
+            type: string
+        X-Ca-Signature:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/EncryptedEnvelope"
+
+    SecurityErrorResponse:
+      description: 安全校验失败
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SecurityError"
+
+# ---------------------------------------------------------------------------
+# 路径（占位，后续切片增量补充）
+# ---------------------------------------------------------------------------
+paths: {}
