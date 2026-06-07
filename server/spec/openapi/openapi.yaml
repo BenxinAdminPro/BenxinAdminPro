@@ -1,10 +1,10 @@
 # +----------------------------------------------------------------------
 # | @project   本心通用管理后台 / BenxinAdminPro
-# | @mission   OpenAPI 3.0 规范 v0.5.0 — 安全头 + 认证 + 组织架构 + RBAC + 数据权限
+# | @mission   OpenAPI 3.0 规范 v0.6.0 — 安全头 + 认证 + 组织架构 + RBAC + 数据权限 + 系统管理
 # | @author    仗键天涯(daxing)
 # | @email     3442535897@qq.com
 # | @date      2026-06-07 14:19:00
-# | @updated   2026-06-07 23:50:00
+# | @updated   2026-06-08 00:45:00
 # +----------------------------------------------------------------------
 
 openapi: "3.0.3"
@@ -18,7 +18,8 @@ info:
     v0.3.0: 组织架构（用户/部门/岗位 CRUD）。
     v0.4.0: RBAC 核心（角色/菜单/权限 + Casbin 联动 + Hashid）。
     v0.5.0: 数据权限（角色数据范围 + 行级过滤）。
-  version: "0.5.0"
+    v0.6.0: 系统管理（字典/参数/操作日志/登录日志 + response Registry）。
+  version: "0.6.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -919,3 +920,142 @@ paths:
                       data:
                         type: array
                         items: { type: string }
+
+  # --- T-004a 系统管理 ---
+  /sys/dict/types:
+    get:
+      tags: [System]
+      summary: 字典类型列表
+      operationId: listDictTypes
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    post:
+      tags: [System]
+      summary: 新建字典类型
+      operationId: createDictType
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dict_type, name]
+              properties:
+                dict_type: { type: string }
+                name: { type: string }
+                status: { type: integer }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/dict/data:
+    get:
+      tags: [System]
+      summary: 按类型查字典项
+      operationId: listDictData
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: dict_type, in: query, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/configs:
+    get:
+      tags: [System]
+      summary: 参数列表
+      operationId: listConfigs
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    post:
+      tags: [System]
+      summary: 新建参数
+      operationId: createConfig
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [config_key]
+              properties:
+                config_key: { type: string }
+                config_value: { type: string }
+                name: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/logs/oper:
+    get:
+      tags: [System]
+      summary: 操作日志列表
+      operationId: listOperLogs
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: operator, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    delete:
+      tags: [System]
+      summary: 清理操作日志
+      operationId: cleanOperLogs
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/logs/login:
+    get:
+      tags: [System]
+      summary: 登录日志列表
+      operationId: listLoginLogs
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: username, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    delete:
+      tags: [System]
+      summary: 清理登录日志
+      operationId: cleanLoginLogs
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }

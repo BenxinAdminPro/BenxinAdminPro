@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 17:15:00
+// | @updated   2026-06-08 00:26:00
 // +----------------------------------------------------------------------
 
 package auth
@@ -71,6 +72,7 @@ type authService struct {
 	statusChecker StatusChecker
 	argon2Params  Argon2idParams
 	logger        *slog.Logger
+	loginLogger   LoginLogger // 可选，T-004a 注入，记录登录事件
 }
 
 // AuthServiceDeps 是 AuthService 的依赖注入参数。
@@ -84,6 +86,7 @@ type AuthServiceDeps struct {
 	StatusChecker StatusChecker   // 可选，默认 Status!=0 → disabled
 	Argon2Params  Argon2idParams  // 用于 dummy 校验
 	Logger        *slog.Logger    // 可选，默认 slog.Default()
+	LoginLogger   LoginLogger     // 可选，T-004a 注入，nil 时不记录
 }
 
 // NewAuthService 创建认证编排服务。
@@ -121,6 +124,7 @@ func NewAuthService(deps AuthServiceDeps) (AuthService, error) {
 		statusChecker: sc,
 		argon2Params:  deps.Argon2Params,
 		logger:        logger,
+		loginLogger:   deps.LoginLogger,
 	}, nil
 }
 
@@ -225,6 +229,9 @@ func (s *authService) Login(ctx context.Context, in LoginInput) (TokenPair, erro
 		slog.String("client_ip", in.ClientIP),
 		slog.String("user_id", user.ID))
 
+	// 登录日志落库
+	s.logLoginEvent(ctx, in, true, "")
+
 	return pair, nil
 }
 
@@ -252,8 +259,21 @@ func (s *authService) Logout(ctx context.Context, accessToken, refreshToken stri
 	return nil
 }
 
+func (s *authService) logLoginEvent(ctx context.Context, in LoginInput, success bool, reason string) {
+	if s.loginLogger != nil {
+		_ = s.loginLogger.Log(ctx, LoginEvent{
+			Username:  in.Username,
+			IP:        in.ClientIP,
+			UserAgent: "", // handler 层可补充
+			Success:   success,
+			Reason:    reason,
+		})
+	}
+}
+
 // handleFailure 记录失败并累计计数。
 func (s *authService) handleFailure(ctx context.Context, in LoginInput) {
+	s.logLoginEvent(ctx, in, false, "bad_credentials")
 	if s.lockout == nil {
 		return
 	}

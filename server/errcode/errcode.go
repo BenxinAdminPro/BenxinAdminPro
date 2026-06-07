@@ -52,6 +52,12 @@ const (
 
 	// T-003c 数据权限错误码 offset（50~59 段）
 	OffsetInvalidDataScope = 50
+
+	// T-004a 系统管理错误码 offset（60~69 段）
+	OffsetDictTypeExists   = 60
+	OffsetDictTypeNotFound = 61
+	OffsetConfigKeyExists  = 62
+	OffsetConfigNotFound   = 63
 )
 
 // ---------------------------------------------------------------------------
@@ -87,6 +93,10 @@ var httpStatus = map[int]int{
 	OffsetInvalidID:             400,
 	OffsetPermCodeExists:        409,
 	OffsetInvalidDataScope:      400,
+	OffsetDictTypeExists:       409,
+	OffsetDictTypeNotFound:     404,
+	OffsetConfigKeyExists:      409,
+	OffsetConfigNotFound:       404,
 }
 
 var i18nKeys = map[int]string{
@@ -118,6 +128,10 @@ var i18nKeys = map[int]string{
 	OffsetInvalidID:             "sys.invalid_id",
 	OffsetPermCodeExists:        "sys.perm_code_exists",
 	OffsetInvalidDataScope:      "sys.invalid_data_scope",
+	OffsetDictTypeExists:       "sys.dict_type_exists",
+	OffsetDictTypeNotFound:     "sys.dict_type_not_found",
+	OffsetConfigKeyExists:      "sys.config_key_exists",
+	OffsetConfigNotFound:       "sys.config_not_found",
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +193,12 @@ type Registry struct {
 
 	// T-003c 数据权限
 	ErrInvalidDataScope Error
+
+	// T-004a 系统管理
+	ErrDictTypeExists   Error
+	ErrDictTypeNotFound Error
+	ErrConfigKeyExists  Error
+	ErrConfigNotFound   Error
 }
 
 // NewRegistry 用配置注入的 segmentBase 构建错误码注册表。
@@ -216,7 +236,37 @@ func NewRegistry(segmentBase int) (*Registry, error) {
 		ErrInvalidID:             newErr(segmentBase, OffsetInvalidID),
 		ErrPermCodeExists:        newErr(segmentBase, OffsetPermCodeExists),
 		ErrInvalidDataScope:     newErr(segmentBase, OffsetInvalidDataScope),
+		ErrDictTypeExists:      newErr(segmentBase, OffsetDictTypeExists),
+		ErrDictTypeNotFound:    newErr(segmentBase, OffsetDictTypeNotFound),
+		ErrConfigKeyExists:     newErr(segmentBase, OffsetConfigKeyExists),
+		ErrConfigNotFound:      newErr(segmentBase, OffsetConfigNotFound),
 	}, nil
+}
+
+// AllSpecs 返回所有已注册错误码的规格列表，供 response.Registry 迁移使用。
+func (r *Registry) AllSpecs() []struct{ Code, HTTP int; I18nKey string } {
+	var specs []struct{ Code, HTTP int; I18nKey string }
+	for _, e := range r.allErrors() {
+		specs = append(specs, struct{ Code, HTTP int; I18nKey string }{e.Code, e.HTTP, e.Message})
+	}
+	return specs
+}
+
+func (r *Registry) allErrors() []Error {
+	return []Error{
+		r.ErrMissingSecurityHeaders, r.ErrTimestampExpired, r.ErrSignInvalid,
+		r.ErrNonceReplay, r.ErrDecryptFailed, r.ErrTokenInvalid,
+		r.ErrTokenExpired, r.ErrTokenRevoked, r.ErrForbidden,
+		r.ErrBadCredentials, r.ErrCaptchaRequired, r.ErrCaptchaInvalid,
+		r.ErrAccountLocked, r.ErrAccountDisabled,
+		r.ErrUserNotFound, r.ErrUsernameExists, r.ErrDeptHasChildren,
+		r.ErrDeptHasUsers, r.ErrPostCodeExists, r.ErrInvalidParentDept,
+		r.ErrRoleCodeExists, r.ErrMenuPermRequired, r.ErrMenuPermForbidden,
+		r.ErrMenuHasChildren, r.ErrRoleInUse, r.ErrInvalidID, r.ErrPermCodeExists,
+		r.ErrInvalidDataScope,
+		r.ErrDictTypeExists, r.ErrDictTypeNotFound,
+		r.ErrConfigKeyExists, r.ErrConfigNotFound,
+	}
 }
 
 func newErr(base, offset int) Error {
