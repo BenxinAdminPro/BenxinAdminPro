@@ -4,7 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:00:00
-// | @updated   2026-06-08 02:30:00
+// | @updated   2026-06-08 03:06:00
 // +----------------------------------------------------------------------
 
 package errcode
@@ -66,6 +66,10 @@ const (
 	OffsetFileNotFound     = 73
 	OffsetFileNameInvalid  = 74
 	OffsetStorageFailed    = 75
+
+	// T-005 配置中心错误码 offset（80~89 段）
+	OffsetConfigDecryptFailed = 80
+	OffsetMigrationFailed     = 81
 )
 
 // ---------------------------------------------------------------------------
@@ -111,6 +115,8 @@ var httpStatus = map[int]int{
 	OffsetFileNotFound:        404,
 	OffsetFileNameInvalid:     400,
 	OffsetStorageFailed:       500,
+	OffsetConfigDecryptFailed: 500,
+	OffsetMigrationFailed:     500,
 }
 
 var i18nKeys = map[int]string{
@@ -152,6 +158,8 @@ var i18nKeys = map[int]string{
 	OffsetFileNotFound:        "sys.file_not_found",
 	OffsetFileNameInvalid:     "sys.file_name_invalid",
 	OffsetStorageFailed:       "sys.storage_failed",
+	OffsetConfigDecryptFailed: "sys.config_decrypt_failed",
+	OffsetMigrationFailed:     "sys.migration_failed",
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +238,10 @@ type Registry struct {
 	ErrFileNotFound     Error
 	ErrFileNameInvalid  Error
 	ErrStorageFailed    Error
+
+	// T-005 配置中心
+	ErrConfigDecryptFailed Error
+	ErrMigrationFailed     Error
 }
 
 // NewRegistry 用配置注入的 segmentBase 构建错误码注册表。
@@ -277,6 +289,8 @@ func NewRegistry(segmentBase int) (*Registry, error) {
 		ErrFileNotFound:        newErr(segmentBase, OffsetFileNotFound),
 		ErrFileNameInvalid:     newErr(segmentBase, OffsetFileNameInvalid),
 		ErrStorageFailed:       newErr(segmentBase, OffsetStorageFailed),
+		ErrConfigDecryptFailed: newErr(segmentBase, OffsetConfigDecryptFailed),
+		ErrMigrationFailed:     newErr(segmentBase, OffsetMigrationFailed),
 	}, nil
 }
 
@@ -312,6 +326,7 @@ func (r *Registry) allOffsets() [][2]int {
 		OffsetConfigKeyExists, OffsetConfigNotFound,
 		OffsetFileTooLarge, OffsetFileExtNotAllowed, OffsetFileTypeMismatch,
 		OffsetFileNotFound, OffsetFileNameInvalid, OffsetStorageFailed,
+		OffsetConfigDecryptFailed, OffsetMigrationFailed,
 	}
 	var pairs [][2]int
 	for i, e := range errs {
@@ -336,6 +351,7 @@ func (r *Registry) allErrors() []Error {
 		r.ErrConfigKeyExists, r.ErrConfigNotFound,
 		r.ErrFileTooLarge, r.ErrFileExtNotAllowed, r.ErrFileTypeMismatch,
 		r.ErrFileNotFound, r.ErrFileNameInvalid, r.ErrStorageFailed,
+		r.ErrConfigDecryptFailed, r.ErrMigrationFailed,
 	}
 }
 

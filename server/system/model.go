@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 00:10:00
+// | @updated   2026-06-08 03:04:00
 // +----------------------------------------------------------------------
 
 package system
@@ -48,15 +49,24 @@ type SysDictData struct {
 // ---------------------------------------------------------------------------
 
 // SysConfig 系统参数。
-// 注：敏感参数加密存储留 T-005 配置中心，本片纯 DB 明文。
+// T-005：is_encrypted=1 的参数 GCM 加密存储，读自动解密。
 type SysConfig struct {
 	ID          uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	ConfigKey   string    `gorm:"type:varchar(128);uniqueIndex;not null" json:"config_key"`
 	ConfigValue string    `gorm:"type:text" json:"config_value"`
 	Name        string    `gorm:"type:varchar(64)" json:"name"`
 	Remark      string    `gorm:"type:varchar(255)" json:"remark"`
+	IsEncrypted int8      `gorm:"type:tinyint;default:0;not null" json:"is_encrypted"` // 0=明文 1=GCM 加密
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// SysMigration 迁移版本记录。
+type SysMigration struct {
+	ID        uint64    `gorm:"primaryKey;autoIncrement"`
+	Version   string    `gorm:"type:varchar(128);uniqueIndex;not null"`
+	AppliedAt time.Time `gorm:"autoCreateTime"`
+	Checksum  string    `gorm:"type:varchar(64)"`
 }
 
 // ---------------------------------------------------------------------------

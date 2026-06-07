@@ -72,6 +72,10 @@ var expectedCodes = []struct {
 	{11073, 404, "sys.file_not_found"},
 	{11074, 400, "sys.file_name_invalid"},
 	{11075, 500, "sys.storage_failed"},
+
+	// T-005 配置中心 (offset 80~81)
+	{11080, 500, "sys.config_decrypt_failed"},
+	{11081, 500, "sys.migration_failed"},
 }
 
 // TestErrcodeRegressionViaRegistry 验证：

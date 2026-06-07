@@ -8,7 +8,7 @@
 - 架构文档：BenxinAdminPro-架构与规划文档 v1.1
 - 仓库：Gitee 主仓 https://gitee.com/benxin-admin-pro/benxin-admin-pro.git ；GitHub 镜像 https://github.com/BenxinAdminPro/BenxinAdminPro.git（独立于 BenxinKP）
 - 本地：/Users/daxing/projects/BenxinAdminPro（与 BenxinKP 平级，多根工作区聚合）
-- 最后更新：2026-06-08（T-004c 渲染收敛完成）
+- 最后更新：2026-06-08（T-005 配置中心完成）
 
 ## 核心原则（铁律）
 - 业务中立：不进任何业务概念。
@@ -47,7 +47,9 @@
 | T-003b | RBAC 核心（角色/权限/菜单 + Casbin 联动 + Hashid 收口） | ✅ 至 bd990a7 |
 | T-003c | 数据权限（B 档三档 + 通用 DataScope 解析器） | ✅ 至 e167098（RBAC 收官） |
 | T-004a | 系统管理（response Registry 接管 + 字典 + 参数 + 操作日志 + 登录日志） | ✅ 至 f1594d0。详见下方记录。 |
-| T-004b | 文件管理 + 存储驱动（StorageDriver + LocalDriver + 鉴权下载 + 上传安全） | ✅ 双推完成（至 448671f）。T-004 整块完成。详见下方记录。 |
+| T-004b | 文件管理 + 存储驱动（StorageDriver + LocalDriver + 鉴权下载 + 上传安全） | ✅ 至 448671f |
+| T-004c | 渲染收敛（handler 统一 response.Render + errcode 降级纯 code）| ✅ 至 589f9e1 |
+| T-005 | 配置中心（缓存+热加载+GCM 加密+迁移执行器）| ✅ 详见 `reports/T-005-report.md` |
 
 **T-001~T-003 收尾记录**（详见此前版本，要点）
 - T-001 crypto/auth/rbac 三核心 + crypto-vectors KAT + DI；集成测试真后端。
