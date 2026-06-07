@@ -4,7 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:00:00
-// | @updated   2026-06-07 17:00:00
+// | @updated   2026-06-07 19:00:00
 // +----------------------------------------------------------------------
 
 package errcode
@@ -32,6 +32,14 @@ const (
 	OffsetCaptchaInvalid  = 22
 	OffsetAccountLocked   = 23
 	OffsetAccountDisabled = 24
+
+	// T-003a 组织架构错误码 offset（30~39 段）
+	OffsetUserNotFound     = 30
+	OffsetUsernameExists   = 31
+	OffsetDeptHasChildren  = 32
+	OffsetDeptHasUsers     = 33
+	OffsetPostCodeExists   = 34
+	OffsetInvalidParentDept = 35
 )
 
 // ---------------------------------------------------------------------------
@@ -53,6 +61,12 @@ var httpStatus = map[int]int{
 	OffsetCaptchaInvalid:         400,
 	OffsetAccountLocked:          423,
 	OffsetAccountDisabled:        403,
+	OffsetUserNotFound:           404,
+	OffsetUsernameExists:         409,
+	OffsetDeptHasChildren:        409,
+	OffsetDeptHasUsers:           409,
+	OffsetPostCodeExists:         409,
+	OffsetInvalidParentDept:      400,
 }
 
 var i18nKeys = map[int]string{
@@ -70,6 +84,12 @@ var i18nKeys = map[int]string{
 	OffsetCaptchaInvalid:         "auth.captcha_invalid",
 	OffsetAccountLocked:          "auth.account_locked",
 	OffsetAccountDisabled:        "auth.account_disabled",
+	OffsetUserNotFound:           "sys.user_not_found",
+	OffsetUsernameExists:         "sys.username_exists",
+	OffsetDeptHasChildren:        "sys.dept_has_children",
+	OffsetDeptHasUsers:           "sys.dept_has_users",
+	OffsetPostCodeExists:         "sys.post_code_exists",
+	OffsetInvalidParentDept:      "sys.invalid_parent_dept",
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +131,14 @@ type Registry struct {
 	ErrCaptchaInvalid  Error
 	ErrAccountLocked   Error
 	ErrAccountDisabled Error
+
+	// T-003a 组织架构
+	ErrUserNotFound     Error
+	ErrUsernameExists   Error
+	ErrDeptHasChildren  Error
+	ErrDeptHasUsers     Error
+	ErrPostCodeExists   Error
+	ErrInvalidParentDept Error
 }
 
 // NewRegistry 用配置注入的 segmentBase 构建错误码注册表。
@@ -134,6 +162,12 @@ func NewRegistry(segmentBase int) (*Registry, error) {
 		ErrCaptchaInvalid:         newErr(segmentBase, OffsetCaptchaInvalid),
 		ErrAccountLocked:          newErr(segmentBase, OffsetAccountLocked),
 		ErrAccountDisabled:        newErr(segmentBase, OffsetAccountDisabled),
+		ErrUserNotFound:           newErr(segmentBase, OffsetUserNotFound),
+		ErrUsernameExists:         newErr(segmentBase, OffsetUsernameExists),
+		ErrDeptHasChildren:        newErr(segmentBase, OffsetDeptHasChildren),
+		ErrDeptHasUsers:           newErr(segmentBase, OffsetDeptHasUsers),
+		ErrPostCodeExists:         newErr(segmentBase, OffsetPostCodeExists),
+		ErrInvalidParentDept:      newErr(segmentBase, OffsetInvalidParentDept),
 	}, nil
 }
 
