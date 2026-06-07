@@ -1,10 +1,10 @@
 # +----------------------------------------------------------------------
 # | @project   本心通用管理后台 / BenxinAdminPro
-# | @mission   OpenAPI 3.0 规范 v0.6.0 — 安全头 + 认证 + 组织架构 + RBAC + 数据权限 + 系统管理
+# | @mission   OpenAPI 3.0 规范 v0.7.0 — 全底座 API 规范
 # | @author    仗键天涯(daxing)
 # | @email     3442535897@qq.com
 # | @date      2026-06-07 14:19:00
-# | @updated   2026-06-08 00:45:00
+# | @updated   2026-06-08 01:40:00
 # +----------------------------------------------------------------------
 
 openapi: "3.0.3"
@@ -19,7 +19,8 @@ info:
     v0.4.0: RBAC 核心（角色/菜单/权限 + Casbin 联动 + Hashid）。
     v0.5.0: 数据权限（角色数据范围 + 行级过滤）。
     v0.6.0: 系统管理（字典/参数/操作日志/登录日志 + response Registry）。
-  version: "0.6.0"
+    v0.7.0: 文件管理（StorageDriver + 本地驱动 + 鉴权下载 + 上传安全）。
+  version: "0.7.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -1056,6 +1057,79 @@ paths:
       responses:
         "200":
           description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # --- T-004b 文件管理 ---
+  /sys/files:
+    post:
+      tags: [File]
+      summary: 上传文件
+      operationId: uploadFile
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: 上传成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+        "413":
+          description: 文件过大
+        "415":
+          description: 文件类型不允许
+    get:
+      tags: [File]
+      summary: 文件列表
+      operationId: listFiles
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: uploader, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/files/{id}/download:
+    get:
+      tags: [File]
+      summary: 鉴权下载文件
+      operationId: downloadFile
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: 文件流
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /sys/files/{id}:
+    delete:
+      tags: [File]
+      summary: 删除文件
+      operationId: deleteFile
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: 删除成功
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiResponse" }

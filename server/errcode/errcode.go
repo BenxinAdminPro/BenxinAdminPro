@@ -4,7 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:00:00
-// | @updated   2026-06-07 23:30:00
+// | @updated   2026-06-08 01:22:00
 // +----------------------------------------------------------------------
 
 package errcode
@@ -58,6 +58,14 @@ const (
 	OffsetDictTypeNotFound = 61
 	OffsetConfigKeyExists  = 62
 	OffsetConfigNotFound   = 63
+
+	// T-004b 文件管理错误码 offset（70~79 段）
+	OffsetFileTooLarge     = 70
+	OffsetFileExtNotAllowed = 71
+	OffsetFileTypeMismatch = 72
+	OffsetFileNotFound     = 73
+	OffsetFileNameInvalid  = 74
+	OffsetStorageFailed    = 75
 )
 
 // ---------------------------------------------------------------------------
@@ -97,6 +105,12 @@ var httpStatus = map[int]int{
 	OffsetDictTypeNotFound:     404,
 	OffsetConfigKeyExists:      409,
 	OffsetConfigNotFound:       404,
+	OffsetFileTooLarge:        413,
+	OffsetFileExtNotAllowed:   415,
+	OffsetFileTypeMismatch:    415,
+	OffsetFileNotFound:        404,
+	OffsetFileNameInvalid:     400,
+	OffsetStorageFailed:       500,
 }
 
 var i18nKeys = map[int]string{
@@ -132,6 +146,12 @@ var i18nKeys = map[int]string{
 	OffsetDictTypeNotFound:     "sys.dict_type_not_found",
 	OffsetConfigKeyExists:      "sys.config_key_exists",
 	OffsetConfigNotFound:       "sys.config_not_found",
+	OffsetFileTooLarge:        "sys.file_too_large",
+	OffsetFileExtNotAllowed:   "sys.file_ext_not_allowed",
+	OffsetFileTypeMismatch:    "sys.file_type_mismatch",
+	OffsetFileNotFound:        "sys.file_not_found",
+	OffsetFileNameInvalid:     "sys.file_name_invalid",
+	OffsetStorageFailed:       "sys.storage_failed",
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +219,14 @@ type Registry struct {
 	ErrDictTypeNotFound Error
 	ErrConfigKeyExists  Error
 	ErrConfigNotFound   Error
+
+	// T-004b 文件管理
+	ErrFileTooLarge     Error
+	ErrFileExtNotAllowed Error
+	ErrFileTypeMismatch Error
+	ErrFileNotFound     Error
+	ErrFileNameInvalid  Error
+	ErrStorageFailed    Error
 }
 
 // NewRegistry 用配置注入的 segmentBase 构建错误码注册表。
@@ -240,6 +268,12 @@ func NewRegistry(segmentBase int) (*Registry, error) {
 		ErrDictTypeNotFound:    newErr(segmentBase, OffsetDictTypeNotFound),
 		ErrConfigKeyExists:     newErr(segmentBase, OffsetConfigKeyExists),
 		ErrConfigNotFound:      newErr(segmentBase, OffsetConfigNotFound),
+		ErrFileTooLarge:        newErr(segmentBase, OffsetFileTooLarge),
+		ErrFileExtNotAllowed:   newErr(segmentBase, OffsetFileExtNotAllowed),
+		ErrFileTypeMismatch:    newErr(segmentBase, OffsetFileTypeMismatch),
+		ErrFileNotFound:        newErr(segmentBase, OffsetFileNotFound),
+		ErrFileNameInvalid:     newErr(segmentBase, OffsetFileNameInvalid),
+		ErrStorageFailed:       newErr(segmentBase, OffsetStorageFailed),
 	}, nil
 }
 
@@ -266,6 +300,8 @@ func (r *Registry) allErrors() []Error {
 		r.ErrInvalidDataScope,
 		r.ErrDictTypeExists, r.ErrDictTypeNotFound,
 		r.ErrConfigKeyExists, r.ErrConfigNotFound,
+		r.ErrFileTooLarge, r.ErrFileExtNotAllowed, r.ErrFileTypeMismatch,
+		r.ErrFileNotFound, r.ErrFileNameInvalid, r.ErrStorageFailed,
 	}
 }
 

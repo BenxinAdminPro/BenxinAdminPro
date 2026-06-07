@@ -64,6 +64,14 @@ var expectedCodes = []struct {
 	{11061, 404, "sys.dict_type_not_found"},
 	{11062, 409, "sys.config_key_exists"},
 	{11063, 404, "sys.config_not_found"},
+
+	// T-004b 文件管理 (offset 70~75)
+	{11070, 413, "sys.file_too_large"},
+	{11071, 415, "sys.file_ext_not_allowed"},
+	{11072, 415, "sys.file_type_mismatch"},
+	{11073, 404, "sys.file_not_found"},
+	{11074, 400, "sys.file_name_invalid"},
+	{11075, 500, "sys.storage_failed"},
 }
 
 // TestErrcodeRegressionViaRegistry 验证：
