@@ -97,6 +97,9 @@ func (d *LocalDriver) Get(_ context.Context, key string) (io.ReadCloser, error) 
 	return os.Open(path)
 }
 
+// GetRootDir 返回存储根目录（仅供测试断言路径穿越防护，生产不应使用）。
+func (d *LocalDriver) GetRootDir() string { return d.rootDir }
+
 func (d *LocalDriver) Delete(_ context.Context, key string) error {
 	path, err := d.safePath(key)
 	if err != nil {
