@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:24:00
+// | @updated   2026-06-07 21:30:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -22,73 +23,61 @@ const (
 	PermDeptDelete = "sys:dept:delete"
 )
 
-// DeptHandler 部门 CRUD handler。
 type DeptHandler struct {
-	svc  *DeptService
-	errs *errcode.Registry
+	svc    *DeptService
+	errs   *errcode.Registry
+	hasher *Hasher
 }
 
-// NewDeptHandler 创建部门 handler。
-func NewDeptHandler(svc *DeptService, errs *errcode.Registry) *DeptHandler {
-	return &DeptHandler{svc: svc, errs: errs}
+func NewDeptHandler(svc *DeptService, errs *errcode.Registry, hasher *Hasher) *DeptHandler {
+	return &DeptHandler{svc: svc, errs: errs, hasher: hasher}
 }
 
-// RegisterRoutes 注册部门路由。
 func (h *DeptHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.GET("/sys/depts/tree", h.Tree)
-	rg.POST("/sys/depts", h.Create)
-	rg.PUT("/sys/depts/:id", h.Update)
-	rg.DELETE("/sys/depts/:id", h.Delete)
+	rg.GET("/sys/depts/tree", RequirePerm(PermDeptTree), h.Tree)
+	rg.POST("/sys/depts", RequirePerm(PermDeptCreate), h.Create)
+	rg.PUT("/sys/depts/:id", RequirePerm(PermDeptUpdate), h.Update)
+	rg.DELETE("/sys/depts/:id", RequirePerm(PermDeptDelete), h.Delete)
 }
 
 func (h *DeptHandler) Tree(c *gin.Context) {
 	tree, err := h.svc.Tree(c.Request.Context())
-	if err != nil {
-		respondError(c, err)
-		return
-	}
+	if err != nil { respondError(c, err); return }
 	respondOK(c, tree)
 }
 
 func (h *DeptHandler) Create(c *gin.Context) {
 	var in CreateDeptInput
-	if err := c.ShouldBindJSON(&in); err != nil {
-		respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil)
-		return
-	}
+	if err := c.ShouldBindJSON(&in); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
 	dept, err := h.svc.Create(c.Request.Context(), in)
-	if err != nil {
-		respondError(c, err)
-		return
-	}
+	if err != nil { respondError(c, err); return }
 	respondOK(c, dept)
 }
 
 func (h *DeptHandler) Update(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		return
-	}
+	id, err := h.parseHID(c, "id")
+	if err != nil { return }
 	var in UpdateDeptInput
-	if err := c.ShouldBindJSON(&in); err != nil {
-		respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil)
-		return
-	}
-	if err := h.svc.Update(c.Request.Context(), id, in); err != nil {
-		respondError(c, err)
-		return
-	}
+	if err := c.ShouldBindJSON(&in); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
+	if err := h.svc.Update(c.Request.Context(), id, in); err != nil { respondError(c, err); return }
 	respondOK(c, nil)
 }
 
 func (h *DeptHandler) Delete(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		return
-	}
-	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		respondError(c, err)
-		return
-	}
+	id, err := h.parseHID(c, "id")
+	if err != nil { return }
+	if err := h.svc.Delete(c.Request.Context(), id); err != nil { respondError(c, err); return }
 	respondOK(c, nil)
+}
+
+func (h *DeptHandler) parseHID(c *gin.Context, param string) (uint64, error) {
+	if h.hasher != nil {
+		id, err := h.hasher.Decode(c.Param(param))
+		if err != nil {
+			respondJSON(c, h.errs.ErrInvalidID.HTTP, h.errs.ErrInvalidID.Code, h.errs.ErrInvalidID.Message, nil)
+			return 0, err
+		}
+		return id, nil
+	}
+	return parseID(c, param)
 }

@@ -1,9 +1,10 @@
 // +----------------------------------------------------------------------
 // | @project   本心通用管理后台 / BenxinAdminPro
-// | @mission   用户 HTTP handler — CRUD + 密码管理 + 启用禁用
+// | @mission   用户 HTTP handler — CRUD + 密码管理 + 启用禁用 + 分配角色
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:22:00
+// | @updated   2026-06-07 21:28:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -16,7 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 权限码占位（统一命名，T-003b 接 Casbin 后启用）
+// 权限码常量（统一命名 模块:资源:动作）。
 const (
 	PermUserList     = "sys:user:list"
 	PermUserCreate   = "sys:user:create"
@@ -25,28 +26,31 @@ const (
 	PermUserDelete   = "sys:user:delete"
 	PermUserPassword = "sys:user:password"
 	PermUserStatus   = "sys:user:status"
+	PermUserAssign   = "sys:user:assign"
 )
 
 // UserHandler 用户 CRUD handler。
 type UserHandler struct {
-	svc  *UserService
-	errs *errcode.Registry
+	svc    *UserService
+	errs   *errcode.Registry
+	hasher *Hasher
 }
 
 // NewUserHandler 创建用户 handler。
-func NewUserHandler(svc *UserService, errs *errcode.Registry) *UserHandler {
-	return &UserHandler{svc: svc, errs: errs}
+func NewUserHandler(svc *UserService, errs *errcode.Registry, hasher *Hasher) *UserHandler {
+	return &UserHandler{svc: svc, errs: errs, hasher: hasher}
 }
 
-// RegisterRoutes 注册用户路由。
+// RegisterRoutes 注册用户路由（全部挂 RequirePerm）。
 func (h *UserHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.GET("/sys/users", h.List)
-	rg.POST("/sys/users", h.Create)
-	rg.GET("/sys/users/:id", h.Get)
-	rg.PUT("/sys/users/:id", h.Update)
-	rg.DELETE("/sys/users/:id", h.Delete)
-	rg.PUT("/sys/users/:id/password", h.ResetPassword)
-	rg.PUT("/sys/users/:id/status", h.SetStatus)
+	rg.GET("/sys/users", RequirePerm(PermUserList), h.List)
+	rg.POST("/sys/users", RequirePerm(PermUserCreate), h.Create)
+	rg.GET("/sys/users/:id", RequirePerm(PermUserGet), h.Get)
+	rg.PUT("/sys/users/:id", RequirePerm(PermUserUpdate), h.Update)
+	rg.DELETE("/sys/users/:id", RequirePerm(PermUserDelete), h.Delete)
+	rg.PUT("/sys/users/:id/password", RequirePerm(PermUserPassword), h.ResetPassword)
+	rg.PUT("/sys/users/:id/status", RequirePerm(PermUserStatus), h.SetStatus)
+	rg.PUT("/sys/users/:id/roles", RequirePerm(PermUserAssign), h.AssignRoles)
 }
 
 func (h *UserHandler) List(c *gin.Context) {
@@ -78,7 +82,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 }
 
 func (h *UserHandler) Get(c *gin.Context) {
-	id, err := parseID(c, "id")
+	id, err := h.parseHID(c, "id")
 	if err != nil {
 		return
 	}
@@ -91,7 +95,7 @@ func (h *UserHandler) Get(c *gin.Context) {
 }
 
 func (h *UserHandler) Update(c *gin.Context) {
-	id, err := parseID(c, "id")
+	id, err := h.parseHID(c, "id")
 	if err != nil {
 		return
 	}
@@ -108,7 +112,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 }
 
 func (h *UserHandler) Delete(c *gin.Context) {
-	id, err := parseID(c, "id")
+	id, err := h.parseHID(c, "id")
 	if err != nil {
 		return
 	}
@@ -120,7 +124,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 }
 
 func (h *UserHandler) ResetPassword(c *gin.Context) {
-	id, err := parseID(c, "id")
+	id, err := h.parseHID(c, "id")
 	if err != nil {
 		return
 	}
@@ -139,7 +143,7 @@ func (h *UserHandler) ResetPassword(c *gin.Context) {
 }
 
 func (h *UserHandler) SetStatus(c *gin.Context) {
-	id, err := parseID(c, "id")
+	id, err := h.parseHID(c, "id")
 	if err != nil {
 		return
 	}
@@ -151,6 +155,25 @@ func (h *UserHandler) SetStatus(c *gin.Context) {
 		return
 	}
 	if err := h.svc.SetStatus(c.Request.Context(), id, req.Status); err != nil {
+		respondError(c, err)
+		return
+	}
+	respondOK(c, nil)
+}
+
+func (h *UserHandler) AssignRoles(c *gin.Context) {
+	id, err := h.parseHID(c, "id")
+	if err != nil {
+		return
+	}
+	var req struct {
+		RoleIDs []uint64 `json:"role_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil)
+		return
+	}
+	if err := h.svc.AssignRoles(c.Request.Context(), id, req.RoleIDs); err != nil {
 		respondError(c, err)
 		return
 	}
@@ -184,4 +207,16 @@ func parseID(c *gin.Context, param string) (uint64, error) {
 		return 0, err
 	}
 	return id, nil
+}
+
+func (h *UserHandler) parseHID(c *gin.Context, param string) (uint64, error) {
+	if h.hasher != nil {
+		id, err := h.hasher.Decode(c.Param(param))
+		if err != nil {
+			respondJSON(c, h.errs.ErrInvalidID.HTTP, h.errs.ErrInvalidID.Code, h.errs.ErrInvalidID.Message, nil)
+			return 0, err
+		}
+		return id, nil
+	}
+	return parseID(c, param)
 }

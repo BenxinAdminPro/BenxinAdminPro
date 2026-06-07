@@ -1,10 +1,9 @@
 // +----------------------------------------------------------------------
 // | @project   本心通用管理后台 / BenxinAdminPro
-// | @mission   岗位 HTTP handler — CRUD + 分页
+// | @mission   菜单 HTTP handler — 树查询 + CRUD
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
-// | @date      2026-06-07 19:25:00
-// | @updated   2026-06-07 21:30:00
+// | @date      2026-06-07 21:24:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -16,63 +15,54 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const (
-	PermPostList   = "sys:post:list"
-	PermPostCreate = "sys:post:create"
-	PermPostUpdate = "sys:post:update"
-	PermPostDelete = "sys:post:delete"
-)
-
-type PostHandler struct {
-	svc    *PostService
+type MenuHandler struct {
+	svc    *MenuService
 	errs   *errcode.Registry
 	hasher *Hasher
 }
 
-func NewPostHandler(svc *PostService, errs *errcode.Registry, hasher *Hasher) *PostHandler {
-	return &PostHandler{svc: svc, errs: errs, hasher: hasher}
+func NewMenuHandler(svc *MenuService, errs *errcode.Registry, hasher *Hasher) *MenuHandler {
+	return &MenuHandler{svc: svc, errs: errs, hasher: hasher}
 }
 
-func (h *PostHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.GET("/sys/posts", RequirePerm(PermPostList), h.List)
-	rg.POST("/sys/posts", RequirePerm(PermPostCreate), h.Create)
-	rg.PUT("/sys/posts/:id", RequirePerm(PermPostUpdate), h.Update)
-	rg.DELETE("/sys/posts/:id", RequirePerm(PermPostDelete), h.Delete)
+func (h *MenuHandler) RegisterRoutes(rg *gin.RouterGroup) {
+	rg.GET("/sys/menus/tree", RequirePerm("sys:menu:list"), h.Tree)
+	rg.POST("/sys/menus", RequirePerm("sys:menu:create"), h.Create)
+	rg.PUT("/sys/menus/:id", RequirePerm("sys:menu:update"), h.Update)
+	rg.DELETE("/sys/menus/:id", RequirePerm("sys:menu:delete"), h.Delete)
 }
 
-func (h *PostHandler) List(c *gin.Context) {
-	var q PostListQuery
-	c.ShouldBindQuery(&q)
-	result, err := h.svc.List(c.Request.Context(), q)
+func (h *MenuHandler) Tree(c *gin.Context) {
+	tree, err := h.svc.Tree(c.Request.Context())
 	if err != nil { respondError(c, err); return }
-	respondOK(c, result)
+	respondOK(c, tree)
 }
 
-func (h *PostHandler) Create(c *gin.Context) {
-	var in CreatePostInput
+func (h *MenuHandler) Create(c *gin.Context) {
+	var in CreateMenuInput
 	if err := c.ShouldBindJSON(&in); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
-	post, err := h.svc.Create(c.Request.Context(), in)
+	menu, err := h.svc.Create(c.Request.Context(), in)
 	if err != nil { respondError(c, err); return }
-	respondOK(c, post)
+	respondOK(c, menu)
 }
 
-func (h *PostHandler) Update(c *gin.Context) {
+func (h *MenuHandler) Update(c *gin.Context) {
 	id, err := h.parseHID(c, "id")
 	if err != nil { return }
-	var in UpdatePostInput
+	var in UpdateMenuInput
 	if err := c.ShouldBindJSON(&in); err != nil { respondJSON(c, http.StatusBadRequest, -1, "invalid request", nil); return }
 	if err := h.svc.Update(c.Request.Context(), id, in); err != nil { respondError(c, err); return }
 	respondOK(c, nil)
 }
 
-func (h *PostHandler) Delete(c *gin.Context) {
+func (h *MenuHandler) Delete(c *gin.Context) {
 	id, err := h.parseHID(c, "id")
 	if err != nil { return }
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil { respondError(c, err); return }
 	respondOK(c, nil)
 }
 
-func (h *PostHandler) parseHID(c *gin.Context, param string) (uint64, error) {
+func (h *MenuHandler) parseHID(c *gin.Context, param string) (uint64, error) {
 	if h.hasher != nil {
 		id, err := h.hasher.Decode(c.Param(param))
 		if err != nil {

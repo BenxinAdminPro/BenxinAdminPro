@@ -8,7 +8,7 @@
 - 架构文档：BenxinAdminPro-架构与规划文档 v1.1
 - 仓库：Gitee 主仓 https://gitee.com/benxin-admin-pro/benxin-admin-pro.git ；GitHub 镜像 https://github.com/BenxinAdminPro/BenxinAdminPro.git（独立于 BenxinKP）
 - 本地：/Users/daxing/projects/BenxinAdminPro（与 BenxinKP 平级，多根工作区聚合）
-- 最后更新：2026-06-07（T-003a 完成）
+- 最后更新：2026-06-07（T-003b 完成）
 
 ## 核心原则（铁律）
 - 业务中立：不进任何业务概念。
@@ -38,7 +38,8 @@
 |---|---|---|
 | T-001 | 安全地基（crypto + JWT + Casbin + 跨语言向量） | ✅ 实现 + 集成测试 + 双推完成。 |
 | T-002 | 认证授权（登录/刷新/登出 + 图形验证码 + 失败锁定 + Argon2id） | ✅ 详见下方收尾记录 |
-| T-003a | 组织架构（用户+部门+岗位 CRUD + GormUserProvider） | ✅ 完成报告见 `reports/T-003a-report.md`。对外 ID 暂用自增，留 T-003b 统一 Hashid |
+| T-003a | 组织架构（用户+部门+岗位 CRUD + GormUserProvider） | ✅ 详见 `reports/T-003a-report.md` |
+| T-003b | RBAC 核心（角色/菜单/权限 + Casbin 联动 + Hashid） | ✅ 详见 `reports/T-003b-report.md` |
 
 **T-001 收尾记录**
 - 三核心包：crypto（AES-256-CBC+PKCS7、HMAC-SHA256、5 步防重放）、auth（HS256 TokenService、UUIDv7 jti、双密钥、refresh 轮换拉黑旧 jti）、rbac（NewEnforcer + TurnOffAutoMigrate + Authz 骨架）。

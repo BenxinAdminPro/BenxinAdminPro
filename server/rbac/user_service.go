@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:12:00
+// | @updated   2026-06-07 21:18:00
 // +----------------------------------------------------------------------
 
 package rbac
@@ -63,14 +64,20 @@ func (q *UserListQuery) normalize() {
 
 // UserService 用户 CRUD 服务。
 type UserService struct {
-	db     *gorm.DB
-	hasher auth.PasswordHasher
-	errs   *errcode.Registry
+	db         *gorm.DB
+	hasher     auth.PasswordHasher
+	errs       *errcode.Registry
+	policySync PolicySync // 可选，T-003b 联动 Casbin
 }
 
 // NewUserService 创建用户服务。
 func NewUserService(db *gorm.DB, hasher auth.PasswordHasher, errs *errcode.Registry) *UserService {
 	return &UserService{db: db, hasher: hasher, errs: errs}
+}
+
+// SetPolicySync 注入 Casbin 联动服务（可选，T-003b 启用后调用）。
+func (s *UserService) SetPolicySync(ps PolicySync) {
+	s.policySync = ps
 }
 
 // Create 创建用户。
@@ -248,4 +255,46 @@ func (s *UserService) SetStatus(ctx context.Context, id uint64, status int8) err
 		return s.errs.ErrUserNotFound
 	}
 	return nil
+}
+
+// AssignRoles 给用户分配角色，并联动 Casbin g 规则。
+func (s *UserService) AssignRoles(ctx context.Context, userID uint64, roleIDs []uint64) error {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		tx.Where("user_id = ?", userID).Delete(&SysUserRole{})
+		if len(roleIDs) > 0 {
+			var urs []SysUserRole
+			for _, rid := range roleIDs {
+				urs = append(urs, SysUserRole{UserID: userID, RoleID: rid})
+			}
+			return tx.Create(&urs).Error
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// 联动 Casbin g 规则
+	if s.policySync != nil {
+		var roleCodes []string
+		s.db.WithContext(ctx).Model(&SysRole{}).
+			Joins("JOIN "+s.userRoleTable()+" ON "+s.userRoleTable()+".role_id = "+s.roleTable()+".id").
+			Where(s.userRoleTable()+".user_id = ?", userID).
+			Pluck(s.roleTable()+".code", &roleCodes)
+		userSub := fmt.Sprintf("%d", userID)
+		return s.policySync.SyncUserRoles(ctx, userSub, roleCodes)
+	}
+	return nil
+}
+
+func (s *UserService) userRoleTable() string {
+	stmt := &gorm.Statement{DB: s.db}
+	stmt.Parse(&SysUserRole{})
+	return stmt.Schema.Table
+}
+
+func (s *UserService) roleTable() string {
+	stmt := &gorm.Statement{DB: s.db}
+	stmt.Parse(&SysRole{})
+	return stmt.Schema.Table
 }

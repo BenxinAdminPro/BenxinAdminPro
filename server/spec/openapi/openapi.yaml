@@ -1,10 +1,10 @@
 # +----------------------------------------------------------------------
 # | @project   本心通用管理后台 / BenxinAdminPro
-# | @mission   OpenAPI 3.0 规范 v0.3.0 — 安全头 + 认证 + 组织架构
+# | @mission   OpenAPI 3.0 规范 v0.4.0 — 安全头 + 认证 + 组织架构 + RBAC
 # | @author    仗键天涯(daxing)
 # | @email     3442535897@qq.com
 # | @date      2026-06-07 14:19:00
-# | @updated   2026-06-07 19:40:00
+# | @updated   2026-06-07 22:00:00
 # +----------------------------------------------------------------------
 
 openapi: "3.0.3"
@@ -16,7 +16,8 @@ info:
     v0.1.0: 安全头、C 端加密信封格式和统一安全错误码段。
     v0.2.0: 认证接口（登录/刷新/登出/验证码）。
     v0.3.0: 组织架构（用户/部门/岗位 CRUD）。
-  version: "0.3.0"
+    v0.4.0: RBAC 核心（角色/菜单/权限 + Casbin 联动 + Hashid）。
+  version: "0.4.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -199,6 +200,35 @@ components:
         name: { type: string }
         sort: { type: integer }
         status: { type: integer }
+
+    SysRole:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        sort: { type: integer }
+        status: { type: integer }
+        remark: { type: string }
+
+    SysMenu:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        parent_id: { type: integer, format: int64 }
+        ancestors: { type: string }
+        menu_type: { type: string, enum: [M, C, F] }
+        name: { type: string }
+        perm_code: { type: string }
+        path: { type: string }
+        component: { type: string }
+        icon: { type: string }
+        sort: { type: integer }
+        visible: { type: integer }
+        status: { type: integer }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/SysMenu" }
 
     PageResult:
       type: object
@@ -671,3 +701,215 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # --- T-003b RBAC 核心 ---
+  /sys/roles:
+    get:
+      tags: [RBAC]
+      summary: 角色列表
+      operationId: listRoles
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    post:
+      tags: [RBAC]
+      summary: 新建角色
+      operationId: createRole
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SysRole" }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/roles/{id}:
+    get:
+      tags: [RBAC]
+      summary: 角色详情
+      operationId: getRole
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    put:
+      tags: [RBAC]
+      summary: 更新角色
+      operationId: updateRole
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SysRole" }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    delete:
+      tags: [RBAC]
+      summary: 删除角色
+      operationId: deleteRole
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/roles/{id}/menus:
+    put:
+      tags: [RBAC]
+      summary: 分配角色菜单/权限
+      operationId: assignRoleMenus
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                menu_ids: { type: array, items: { type: integer } }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/menus/tree:
+    get:
+      tags: [RBAC]
+      summary: 菜单树
+      operationId: getMenuTree
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/menus:
+    post:
+      tags: [RBAC]
+      summary: 新建菜单
+      operationId: createMenu
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SysMenu" }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/menus/{id}:
+    put:
+      tags: [RBAC]
+      summary: 更新菜单
+      operationId: updateMenu
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SysMenu" }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    delete:
+      tags: [RBAC]
+      summary: 删除菜单
+      operationId: deleteMenu
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/users/{id}/roles:
+    put:
+      tags: [RBAC]
+      summary: 分配用户角色
+      operationId: assignUserRoles
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role_ids: { type: array, items: { type: integer } }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/auth/menus:
+    get:
+      tags: [RBAC]
+      summary: 当前用户菜单树
+      operationId: getCurrentMenus
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/auth/perms:
+    get:
+      tags: [RBAC]
+      summary: 当前用户权限码集合
+      operationId: getCurrentPerms
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { type: string }

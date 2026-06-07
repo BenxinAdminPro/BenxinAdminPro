@@ -4,7 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:00:00
-// | @updated   2026-06-07 19:00:00
+// | @updated   2026-06-07 21:00:00
 // +----------------------------------------------------------------------
 
 package errcode
@@ -40,6 +40,15 @@ const (
 	OffsetDeptHasUsers     = 33
 	OffsetPostCodeExists   = 34
 	OffsetInvalidParentDept = 35
+
+	// T-003b RBAC 核心错误码 offset（40~49 段）
+	OffsetRoleCodeExists    = 40
+	OffsetMenuPermRequired  = 41
+	OffsetMenuPermForbidden = 42
+	OffsetMenuHasChildren   = 43
+	OffsetRoleInUse         = 44
+	OffsetInvalidID         = 45
+	OffsetPermCodeExists    = 46
 )
 
 // ---------------------------------------------------------------------------
@@ -67,6 +76,13 @@ var httpStatus = map[int]int{
 	OffsetDeptHasUsers:           409,
 	OffsetPostCodeExists:         409,
 	OffsetInvalidParentDept:      400,
+	OffsetRoleCodeExists:        409,
+	OffsetMenuPermRequired:      400,
+	OffsetMenuPermForbidden:     400,
+	OffsetMenuHasChildren:       409,
+	OffsetRoleInUse:             409,
+	OffsetInvalidID:             400,
+	OffsetPermCodeExists:        409,
 }
 
 var i18nKeys = map[int]string{
@@ -90,6 +106,13 @@ var i18nKeys = map[int]string{
 	OffsetDeptHasUsers:           "sys.dept_has_users",
 	OffsetPostCodeExists:         "sys.post_code_exists",
 	OffsetInvalidParentDept:      "sys.invalid_parent_dept",
+	OffsetRoleCodeExists:        "sys.role_code_exists",
+	OffsetMenuPermRequired:      "sys.menu_perm_required",
+	OffsetMenuPermForbidden:     "sys.menu_perm_forbidden",
+	OffsetMenuHasChildren:       "sys.menu_has_children",
+	OffsetRoleInUse:             "sys.role_in_use",
+	OffsetInvalidID:             "sys.invalid_id",
+	OffsetPermCodeExists:        "sys.perm_code_exists",
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +162,15 @@ type Registry struct {
 	ErrDeptHasUsers     Error
 	ErrPostCodeExists   Error
 	ErrInvalidParentDept Error
+
+	// T-003b RBAC 核心
+	ErrRoleCodeExists    Error
+	ErrMenuPermRequired  Error
+	ErrMenuPermForbidden Error
+	ErrMenuHasChildren   Error
+	ErrRoleInUse         Error
+	ErrInvalidID         Error
+	ErrPermCodeExists    Error
 }
 
 // NewRegistry 用配置注入的 segmentBase 构建错误码注册表。
@@ -168,6 +200,13 @@ func NewRegistry(segmentBase int) (*Registry, error) {
 		ErrDeptHasUsers:           newErr(segmentBase, OffsetDeptHasUsers),
 		ErrPostCodeExists:         newErr(segmentBase, OffsetPostCodeExists),
 		ErrInvalidParentDept:      newErr(segmentBase, OffsetInvalidParentDept),
+		ErrRoleCodeExists:        newErr(segmentBase, OffsetRoleCodeExists),
+		ErrMenuPermRequired:      newErr(segmentBase, OffsetMenuPermRequired),
+		ErrMenuPermForbidden:     newErr(segmentBase, OffsetMenuPermForbidden),
+		ErrMenuHasChildren:       newErr(segmentBase, OffsetMenuHasChildren),
+		ErrRoleInUse:             newErr(segmentBase, OffsetRoleInUse),
+		ErrInvalidID:             newErr(segmentBase, OffsetInvalidID),
+		ErrPermCodeExists:        newErr(segmentBase, OffsetPermCodeExists),
 	}, nil
 }
 
