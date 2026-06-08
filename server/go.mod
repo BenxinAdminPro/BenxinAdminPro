@@ -13,6 +13,7 @@ require (
 	github.com/speps/go-hashids/v2 v2.0.1
 	github.com/spf13/viper v1.21.0
 	golang.org/x/crypto v0.52.0
+	golang.org/x/image v0.41.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.1
 )

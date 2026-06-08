@@ -70,6 +70,27 @@ func TestHandlerCaptcha(t *testing.T) {
 	}
 }
 
+func TestHandlerPrecheck(t *testing.T) {
+	router, _ := setupRouter(t)
+	// 全新用户：captcha_required 应为 false
+	w := postJSON(router, "/auth/precheck", map[string]string{"username": "alice"})
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	resp := parseResp(t, w)
+	var data map[string]any
+	json.Unmarshal(resp.Data, &data)
+	if data["captcha_required"] != false {
+		t.Errorf("fresh user captcha_required should be false, got %v", data["captcha_required"])
+	}
+
+	// 缺 username → 400
+	w = postJSON(router, "/auth/precheck", map[string]string{})
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("missing username should be 400, got %d", w.Code)
+	}
+}
+
 func TestHandlerLoginSuccess(t *testing.T) {
 	router, _ := setupRouter(t)
 	w := postJSON(router, "/auth/login", map[string]string{

@@ -1,19 +1,20 @@
 <!--
   +----------------------------------------------------------------------
   | @project   本心通用管理后台 / BenxinAdminPro
-  | @mission   登录页 — 图形验证码 + 用户名/密码登录 + 错误码友好提示
+  | @mission   登录页 — 按需图形验证码(precheck) + 用户名/密码登录 + 错误码友好提示
   | @author    仗键天涯(daxing)
   | @email     3442535897@qq.com
   | @date      2026-06-08 14:00:00
+  | @updated   2026-06-08 15:00:00  T-002b：按后端 precheck 信号按需显示验证码（不再总要求）
   +----------------------------------------------------------------------
 -->
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock, Picture as PictureIcon, Moon, Sunny } from '@element-plus/icons-vue'
-import { fetchCaptcha, type Captcha } from '@/api/auth'
+import { fetchCaptcha, precheck, type Captcha } from '@/api/auth'
 import { useUserStore } from '@/store/user'
 import { isDark, toggleDark } from '@/theme'
 import type { AxiosError } from 'axios'
@@ -27,6 +28,8 @@ const user = useUserStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const captcha = ref<Captcha | null>(null)
+// 是否需要验证码：由后端 precheck 信号决定（未达失败阈值不显示）
+const showCaptcha = ref(false)
 
 const form = reactive({
   username: '',
@@ -37,7 +40,10 @@ const form = reactive({
 const rules = computed<FormRules>(() => ({
   username: [{ required: true, message: t('login.rule.username'), trigger: 'blur' }],
   password: [{ required: true, message: t('login.rule.password'), trigger: 'blur' }],
-  captcha_code: [{ required: true, message: t('login.rule.captcha'), trigger: 'blur' }],
+  // 仅在需要验证码时才作必填校验
+  captcha_code: showCaptcha.value
+    ? [{ required: true, message: t('login.rule.captcha'), trigger: 'blur' }]
+    : [],
 }))
 
 const captchaSrc = computed(() => {
@@ -55,6 +61,25 @@ async function loadCaptcha(): Promise<void> {
   }
 }
 
+/** 据后端 precheck 决定是否显示验证码；首次需要（尚无验证码）时加载。 */
+async function syncCaptchaRequirement(): Promise<void> {
+  if (!form.username) {
+    showCaptcha.value = false
+    return
+  }
+  try {
+    const { captcha_required } = await precheck(form.username)
+    showCaptcha.value = captcha_required
+    if (captcha_required && !captcha.value) await loadCaptcha()
+  } catch {
+    // precheck 失败不阻塞登录：保持当前显示状态
+  }
+}
+
+function onUsernameBlur(): void {
+  void syncCaptchaRequirement()
+}
+
 async function onSubmit(): Promise<void> {
   if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
@@ -65,8 +90,9 @@ async function onSubmit(): Promise<void> {
     await user.loginAction({
       username: form.username,
       password: form.password,
-      captcha_id: captcha.value?.captcha_id,
-      captcha_code: form.captcha_code,
+      // 仅在需要验证码时提交
+      captcha_id: showCaptcha.value ? captcha.value?.captcha_id : undefined,
+      captcha_code: showCaptcha.value ? form.captcha_code : undefined,
     })
     ElMessage.success(t('login.success'))
     const redirect = (route.query.redirect as string) || '/'
@@ -75,13 +101,14 @@ async function onSubmit(): Promise<void> {
     // 后端 message 已是友好文案（凭证错/需验证码/验证码错/锁定/禁用），直接呈现
     const err = e as AxiosError<ApiEnvelope>
     ElMessage.error(err.response?.data?.message || '登录失败，请重试')
-    await loadCaptcha() // 失败刷新验证码（防重放）
+    // 已显示验证码：必刷新（一次性消费，填错/用过即换新——"填错刷新"）
+    if (showCaptcha.value) await loadCaptcha()
+    // 失败可能跨过阈值：重新询问；若由"不需要"转为"需要"则显示并加载
+    await syncCaptchaRequirement()
   } finally {
     loading.value = false
   }
 }
-
-onMounted(loadCaptcha)
 </script>
 
 <template>
@@ -110,6 +137,7 @@ onMounted(loadCaptcha)
             :placeholder="t('login.usernamePlaceholder')"
             :prefix-icon="User"
             clearable
+            @blur="onUsernameBlur"
           />
         </el-form-item>
 
@@ -123,7 +151,7 @@ onMounted(loadCaptcha)
           />
         </el-form-item>
 
-        <el-form-item prop="captcha_code">
+        <el-form-item v-if="showCaptcha" prop="captcha_code">
           <div class="login__captcha">
             <el-input
               v-model="form.captcha_code"

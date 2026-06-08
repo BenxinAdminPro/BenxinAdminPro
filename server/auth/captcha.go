@@ -4,11 +4,13 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 17:06:00
+// | @updated   2026-06-08 15:00:00  T-002b：换开源 Go 字体(opentype)渲染清晰字符，替换不可读的像素块；字符集可配
 // +----------------------------------------------------------------------
 
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -16,12 +18,30 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math"
 	"math/big"
 	"strings"
 	"time"
 
-	"bytes"
+	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/gofont/gomonobold"
+	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/math/f64"
+	"golang.org/x/image/math/fixed"
 )
+
+// captchaFont 是验证码渲染字体（Go Mono Bold，BSD-3-Clause 开源字体），启动时解析一次。
+var captchaFont *opentype.Font
+
+func init() {
+	f, err := opentype.Parse(gomonobold.TTF)
+	if err != nil {
+		// 字体经 Go module 内嵌、构建期确定，解析失败属构建/依赖损坏，panic 暴露
+		panic("auth: parse captcha font: " + err.Error())
+	}
+	captchaFont = f
+}
 
 // Captcha 表示生成的验证码结果。
 type Captcha struct {
@@ -32,10 +52,21 @@ type Captcha struct {
 
 // CaptchaConfig 验证码配置。
 type CaptchaConfig struct {
-	Enabled       bool  // 是否启用
-	TTLSeconds    int   // 答案 TTL，默认 120
-	Length        int   // 验证码位数，默认 4
-	CaseSensitive bool  // 大小写敏感
+	Enabled       bool   // 是否启用
+	TTLSeconds    int    // 答案 TTL，默认 120
+	Length        int    // 验证码位数，默认 4
+	CaseSensitive bool   // 大小写敏感
+	Charset       string // 字符集（默认排除易混字符 0/O/1/l/I）；可配置注入
+}
+
+// defaultCharset 默认字符集：已排除易混字符（无 0/O、1/l/I）。
+const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+
+func (c CaptchaConfig) charset() string {
+	if c.Charset == "" {
+		return defaultCharset
+	}
+	return c.Charset
 }
 
 func (c CaptchaConfig) ttl() time.Duration {
@@ -88,7 +119,7 @@ func (s *CaptchaService) Generate(ctx context.Context) (Captcha, error) {
 		return Captcha{}, fmt.Errorf("auth: generate captcha id: %w", err)
 	}
 
-	answer := generateAnswer(s.cfg.length())
+	answer := generateAnswer(s.cfg.length(), s.cfg.charset())
 
 	// 存储答案
 	key := s.captchaKey(id)
@@ -130,8 +161,6 @@ func (s *CaptchaService) Verify(ctx context.Context, captchaID, code string) (bo
 // 辅助函数
 // ---------------------------------------------------------------------------
 
-const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
-
 func generateID() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -140,7 +169,7 @@ func generateID() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func generateAnswer(length int) string {
+func generateAnswer(length int, charset string) string {
 	result := make([]byte, length)
 	for i := range result {
 		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
@@ -149,68 +178,140 @@ func generateAnswer(length int) string {
 	return string(result)
 }
 
-// renderCaptchaImage 生成简单的验证码 PNG 图片。
+// randInt 返回 [0,n) 的随机整数（仅用于视觉抖动/干扰，非安全敏感）。
+func randInt(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	v, _ := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	return int(v.Int64())
+}
+
+// renderCaptchaImage 用开源 Go 字体（opentype）渲染验证码 PNG。
+// 防自动化：逐字符小角度旋转 + 整体波浪扭曲 + 间距收紧略粘连 + 交叉干扰线 + 噪点。
+// 可读性：保持人眼稍辨认即可读（"看一眼能读出但不一目了然"），不退化为不可读色块。
 // 返回 data:image/png;base64,... 格式。
 func renderCaptchaImage(text string) (string, error) {
-	width := 40 * len(text)
+	const (
+		height   = 50
+		fontSize = 30.0
+		cellStep = 24 // 每字符水平步进（收紧 → 略粘连）
+		cellW    = 40 // 单字符画布宽（大于步进，留旋转溢出 + 重叠）
+		padX     = 10
+	)
+	width := cellStep*len(text) + padX*2 + 6
 	if width < 120 {
 		width = 120
 	}
-	height := 50
 
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-
-	// 浅色背景
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			img.Set(x, y, color.RGBA{240, 240, 240, 255})
-		}
+	face, err := opentype.NewFace(captchaFont, &opentype.FaceOptions{
+		Size:    fontSize,
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		return "", err
 	}
+	defer face.Close()
 
-	// 简单的字符绘制（每个字符用块表示）
-	charWidth := width / len(text)
+	// 文本层（透明）：逐字符旋转后合成，便于整体波浪扭曲
+	layer := image.NewRGBA(image.Rect(0, 0, width, height))
 	for i, ch := range text {
-		drawChar(img, i*charWidth+5, 10, byte(ch))
+		// 字符保持较深以确保对比度（抗 OCR 靠扭曲/干扰线，不靠淡色）
+		col := color.RGBA{uint8(15 + randInt(50)), uint8(15 + randInt(50)), uint8(55 + randInt(85)), 255}
+		cell := drawGlyphCell(face, string(ch), cellW, height, col)
+		angle := float64(randInt(33)-16) * math.Pi / 180 // ±16°
+		dstX := padX + i*cellStep + randInt(5) - 2
+		dstY := randInt(8) - 4
+		compositeRotated(layer, cell, angle, dstX, dstY)
 	}
+	addLines(layer, width, height) // 干扰线进文本层，随波浪一起扭曲
 
-	// 添加干扰线
-	addNoise(img, width, height)
+	warped := warpWave(layer, width, height)
+
+	// 主图：浅色背景 + 合成扭曲后的文本层 + 顶层噪点
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	bg := color.RGBA{uint8(232 + randInt(20)), uint8(232 + randInt(20)), uint8(236 + randInt(18)), 255}
+	xdraw.Draw(img, img.Bounds(), &image.Uniform{bg}, image.Point{}, xdraw.Src)
+	xdraw.Draw(img, img.Bounds(), warped, image.Point{}, xdraw.Over)
+	addNoiseDots(img, width, height)
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		return "", err
 	}
-
-	b64 := base64.StdEncoding.EncodeToString(buf.Bytes())
-	return "data:image/png;base64," + b64, nil
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
-// drawChar 用简单像素块画一个字符。
-func drawChar(img *image.RGBA, x, y int, ch byte) {
-	c := color.RGBA{uint8(50 + ch%100), uint8(30 + ch%80), uint8(80 + ch%120), 255}
-	// 简单的 5x7 像素块代表字符
-	for dy := 0; dy < 28; dy++ {
-		for dx := 0; dx < 20; dx++ {
-			// 基于字符值产生伪随机图案
-			if (int(ch)*7+dx*3+dy*5)%4 != 0 {
-				img.Set(x+dx, y+dy, c)
+// drawGlyphCell 在透明小画布上绘制单个字符（供后续旋转/合成）。
+func drawGlyphCell(face font.Face, ch string, cellW, height int, col color.RGBA) *image.RGBA {
+	cell := image.NewRGBA(image.Rect(0, 0, cellW, height))
+	d := &font.Drawer{Dst: cell, Src: &image.Uniform{col}, Face: face}
+	d.Dot = fixed.Point26_6{X: fixed.I(8), Y: fixed.I(36)}
+	d.DrawString(ch)
+	return cell
+}
+
+// compositeRotated 把 cell 绕中心旋转 angle 后合成到 dst 的 (dstX,dstY)。
+func compositeRotated(dst *image.RGBA, cell *image.RGBA, angle float64, dstX, dstY int) {
+	b := cell.Bounds()
+	cx, cy := float64(b.Dx())/2, float64(b.Dy())/2
+	cos, sin := math.Cos(angle), math.Sin(angle)
+	// 绕中心旋转后平移到目标位置
+	m := f64.Aff3{
+		cos, -sin, cx - cos*cx + sin*cy + float64(dstX),
+		sin, cos, cy - sin*cx - cos*cy + float64(dstY),
+	}
+	xdraw.CatmullRom.Transform(dst, m, cell, b, xdraw.Over, nil)
+}
+
+// warpWave 对整图做列向正弦位移（波浪扭曲），随机相位/振幅。
+func warpWave(src *image.RGBA, width, height int) *image.RGBA {
+	out := image.NewRGBA(src.Bounds())
+	amp := 3.5 + float64(randInt(20))/10 // 3.5~5.5px
+	period := float64(width)/1.6 + float64(randInt(20))
+	phase := float64(randInt(628)) / 100 // 0~2π
+	for x := 0; x < width; x++ {
+		dy := int(math.Round(amp * math.Sin(2*math.Pi*float64(x)/period+phase)))
+		for y := 0; y < height; y++ {
+			sy := y - dy
+			if sy >= 0 && sy < height {
+				out.Set(x, y, src.At(x, sy))
+			}
+		}
+	}
+	return out
+}
+
+// addLines 叠加交叉干扰线（部分较深，穿过字符）。
+func addLines(img *image.RGBA, width, height int) {
+	for i := 0; i < 5; i++ {
+		// 半数深色干扰线（更贴近字符颜色，增加切割难度）
+		var lc color.RGBA
+		if i%2 == 0 {
+			lc = color.RGBA{uint8(60 + randInt(70)), uint8(60 + randInt(70)), uint8(90 + randInt(80)), 255}
+		} else {
+			lc = color.RGBA{uint8(150 + randInt(60)), uint8(150 + randInt(60)), uint8(150 + randInt(60)), 255}
+		}
+		y1, y2 := randInt(height), randInt(height)
+		for x := 0; x < width; x++ {
+			y := y1 + (y2-y1)*x/width
+			// 线宽 1~2px
+			for t := 0; t <= randInt(2); t++ {
+				yy := y + t
+				if yy >= 0 && yy < height {
+					img.Set(x, yy, lc)
+				}
 			}
 		}
 	}
 }
 
-// addNoise 添加干扰线。
-func addNoise(img *image.RGBA, width, height int) {
-	noiseColor := color.RGBA{180, 180, 180, 255}
-	for i := 0; i < 3; i++ {
-		y1B, _ := rand.Int(rand.Reader, big.NewInt(int64(height)))
-		y2B, _ := rand.Int(rand.Reader, big.NewInt(int64(height)))
-		y1, y2 := int(y1B.Int64()), int(y2B.Int64())
-		for x := 0; x < width; x++ {
-			y := y1 + (y2-y1)*x/width
-			if y >= 0 && y < height {
-				img.Set(x, y, noiseColor)
-			}
-		}
+// addNoiseDots 叠加噪点（约 3% 像素）。
+func addNoiseDots(img *image.RGBA, width, height int) {
+	dots := width * height / 32
+	for i := 0; i < dots; i++ {
+		c := color.RGBA{uint8(90 + randInt(120)), uint8(90 + randInt(120)), uint8(90 + randInt(120)), 255}
+		img.Set(randInt(width), randInt(height), c)
 	}
 }

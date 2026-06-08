@@ -21,7 +21,8 @@ info:
     v0.6.0: 系统管理（字典/参数/操作日志/登录日志 + response Registry）。
     v0.7.0: 文件管理（StorageDriver + 本地驱动 + 鉴权下载 + 上传安全）。
     v0.8.0: 配置中心（缓存+热加载+GCM加密+迁移执行器）。
-  version: "0.8.0"
+    v0.8.1: 验证码修复（开源字体渲染清晰字符 + /auth/precheck 告知是否需要验证码，前端按需显示）。
+  version: "0.8.1"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -309,6 +310,42 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/CaptchaResponse"
+
+  /auth/precheck:
+    post:
+      tags: [Auth]
+      summary: 登录前置检查 — 是否需要验证码
+      description: >
+        服务端权威信号：返回该用户名当前是否需要验证码（失败计数达 captcha_threshold）。
+        前端据此按需显示验证码框。注意这是 UX 信号，登录是否强制校验由 /auth/login 独立判定，前端不可绕过。
+      operationId: loginPrecheck
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username:
+                  type: string
+      responses:
+        "200":
+          description: 是否需要验证码
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          captcha_required:
+                            type: boolean
+                            description: 本次登录是否需要验证码
 
   /auth/login:
     post:

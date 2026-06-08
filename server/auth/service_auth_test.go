@@ -148,6 +148,30 @@ func TestLoginCaptchaInvalid(t *testing.T) {
 	assertErrCode(t, err, reg.ErrCaptchaInvalid.Code)
 }
 
+// TestPrecheckCaptchaRequiredSignal 验证 precheck 服务端信号：未达阈值 false、达阈值 true。
+// （前端据此按需显示；是否强制校验由 Login 独立判定，见 TestLoginCaptchaThreshold/Invalid。）
+func TestPrecheckCaptchaRequiredSignal(t *testing.T) {
+	svc, _, _ := setupAuthService(t)
+	ctx := context.Background()
+
+	// 全新用户：不需要验证码
+	need, err := svc.Precheck(ctx, "alice")
+	if err != nil || need {
+		t.Fatalf("fresh user should not need captcha, got need=%v err=%v", need, err)
+	}
+
+	// 连续 3 次失败 → 达 captcha_threshold
+	for i := 0; i < 3; i++ {
+		svc.Login(ctx, LoginInput{Username: "alice", Password: "wrong"})
+	}
+
+	// precheck 现在应为 true
+	need, err = svc.Precheck(ctx, "alice")
+	if err != nil || !need {
+		t.Fatalf("after reaching threshold should need captcha, got need=%v err=%v", need, err)
+	}
+}
+
 func TestLoginLockout(t *testing.T) {
 	env := setupAuthEnv(t)
 	ctx := context.Background()

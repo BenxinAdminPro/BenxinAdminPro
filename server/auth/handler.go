@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 17:18:00
 // | @updated   2026-06-08 02:40:00
+// | @updated   2026-06-08 15:00:00  T-002b：新增 /auth/precheck（前端按需显示验证码的服务端信号）
 // +----------------------------------------------------------------------
 
 package auth
@@ -31,6 +32,7 @@ func NewHandler(svc AuthService, errs *errcode.Registry) *Handler {
 // RegisterRoutes 在路由组上注册认证路由。
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/auth/captcha", h.Captcha)
+	rg.POST("/auth/precheck", h.Precheck)
 	rg.POST("/auth/login", h.Login)
 	rg.POST("/auth/refresh", h.Refresh)
 	rg.POST("/auth/logout", h.Logout)
@@ -44,6 +46,24 @@ func (h *Handler) Captcha(c *gin.Context) {
 		return
 	}
 	response.OK(c, captcha)
+}
+
+// Precheck 返回该用户名当前是否需要验证码（前端据此按需显示）。
+// 注意：这是 UX 信号，登录是否强制校验由后端 Login 独立判定，前端不可绕过。
+func (h *Handler) Precheck(c *gin.Context) {
+	var req struct {
+		Username string `json:"username" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadReq(c)
+		return
+	}
+	required, err := h.svc.Precheck(c.Request.Context(), req.Username)
+	if err != nil {
+		response.ErrResp(c, err)
+		return
+	}
+	response.OK(c, gin.H{"captcha_required": required})
 }
 
 // Login 登录。

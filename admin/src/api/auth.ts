@@ -36,6 +36,11 @@ export function fetchCaptcha() {
   return http.post<Captcha>('/auth/captcha')
 }
 
+/** 登录前置检查：服务端告知该用户名当前是否需要验证码（前端按需显示）。 */
+export function precheck(username: string) {
+  return http.post<{ captcha_required: boolean }>('/auth/precheck', { username })
+}
+
 export function login(payload: LoginPayload) {
   return http.post<TokenPair>('/auth/login', payload)
 }

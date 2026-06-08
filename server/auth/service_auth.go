@@ -53,6 +53,9 @@ type LoginInput struct {
 // AuthService 定义认证编排接口。
 type AuthService interface {
 	IssueCaptcha(ctx context.Context) (Captcha, error)
+	// Precheck 返回该用户名本次登录是否需要验证码（服务端权威，供前端按需显示）。
+	// 仅作 UX 信号；是否真正强制校验由 Login 独立判定，不依赖前端是否提交验证码。
+	Precheck(ctx context.Context, username string) (bool, error)
 	Login(ctx context.Context, in LoginInput) (TokenPair, error)
 	Refresh(ctx context.Context, refreshToken string) (TokenPair, error)
 	Logout(ctx context.Context, accessToken, refreshToken string) error
@@ -143,6 +146,15 @@ func (s *authService) IssueCaptcha(ctx context.Context) (Captcha, error) {
 		return Captcha{}, errorf("captcha not enabled")
 	}
 	return s.captcha.Generate(ctx)
+}
+
+// Precheck 返回该用户名当前是否需要验证码（失败计数达阈值）。
+// 未配置 lockout/captcha（即不会强制验证码）则恒为 false。
+func (s *authService) Precheck(ctx context.Context, username string) (bool, error) {
+	if s.lockout == nil || s.captcha == nil {
+		return false, nil
+	}
+	return s.lockout.NeedsCaptcha(ctx, username)
 }
 
 // Login 执行登录编排。
