@@ -1,0 +1,47 @@
+/**
+ * +----------------------------------------------------------------------
+ * | @project   本心通用管理后台 / BenxinAdminPro
+ * | @mission   全局样式 — reset + 全屏铺满 + 滚动条
+ * | @author    仗键天涯(daxing)
+ * | @email     3442535897@qq.com
+ * | @date      2026-06-08 14:00:00
+ * +----------------------------------------------------------------------
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color-page);
+}
+
+a {
+  text-decoration: none;
+  color: var(--el-color-primary);
+}
+
+/* 细滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--el-border-color-darker);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# 反忽略 admin/.env（仅非密钥占位，根 .gitignore 默认忽略 .env）。
+# ⚠ 真值/密钥一律放 .env.local（被 *.local 忽略），禁止写进 .env。
+!.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
