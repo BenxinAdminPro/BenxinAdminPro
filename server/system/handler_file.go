@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 01:25:00
 // | @updated   2026-06-08 02:40:00
+// | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 PermGuard，路由走真 enforce
 // +----------------------------------------------------------------------
 
 package system
@@ -30,12 +31,12 @@ func NewFileHandler(svc *FileService, errs *errcode.Registry) *FileHandler {
 	return &FileHandler{svc: svc, errs: errs}
 }
 
-// RegisterRoutes 注册文件管理路由。
-func (h *FileHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.POST("/sys/files", requirePerm("sys:file:upload"), h.Upload)
-	rg.GET("/sys/files/:id/download", requirePerm("sys:file:download"), h.Download)
-	rg.GET("/sys/files", requirePerm("sys:file:list"), h.List)
-	rg.DELETE("/sys/files/:id", requirePerm("sys:file:delete"), h.Delete)
+// RegisterRoutes 注册文件管理路由（每条经注入的 guard 真 enforce）。
+func (h *FileHandler) RegisterRoutes(rg *gin.RouterGroup, guard PermGuard) {
+	rg.POST("/sys/files", guard.RequirePerm("sys:file:upload"), h.Upload)
+	rg.GET("/sys/files/:id/download", guard.RequirePerm("sys:file:download"), h.Download)
+	rg.GET("/sys/files", guard.RequirePerm("sys:file:list"), h.List)
+	rg.DELETE("/sys/files/:id", guard.RequirePerm("sys:file:delete"), h.Delete)
 }
 
 // Upload 上传文件（multipart）。

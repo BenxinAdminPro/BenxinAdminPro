@@ -7,6 +7,7 @@
 // | @updated   2026-06-07 21:30:00
 // | @updated   2026-06-07 22:50:00
 // | @updated   2026-06-08 02:40:00
+// | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 AuthzEnforcer，路由走真 enforce
 // +----------------------------------------------------------------------
 
 package rbac
@@ -39,11 +40,11 @@ func NewDeptHandler(svc *DeptService, errs *errcode.Registry, hasher *Hasher) *D
 	return &DeptHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
 }
 
-func (h *DeptHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.GET("/sys/depts/tree", RequirePerm(PermDeptTree), h.Tree)
-	rg.POST("/sys/depts", RequirePerm(PermDeptCreate), h.Create)
-	rg.PUT("/sys/depts/:id", RequirePerm(PermDeptUpdate), h.Update)
-	rg.DELETE("/sys/depts/:id", RequirePerm(PermDeptDelete), h.Delete)
+func (h *DeptHandler) RegisterRoutes(rg *gin.RouterGroup, authz *AuthzEnforcer) {
+	rg.GET("/sys/depts/tree", authz.RequirePerm(PermDeptTree), h.Tree)
+	rg.POST("/sys/depts", authz.RequirePerm(PermDeptCreate), h.Create)
+	rg.PUT("/sys/depts/:id", authz.RequirePerm(PermDeptUpdate), h.Update)
+	rg.DELETE("/sys/depts/:id", authz.RequirePerm(PermDeptDelete), h.Delete)
 }
 
 func (h *DeptHandler) Tree(c *gin.Context) {

@@ -7,6 +7,7 @@
 // | @updated   2026-06-07 21:30:00
 // | @updated   2026-06-07 22:50:00
 // | @updated   2026-06-08 02:40:00
+// | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 AuthzEnforcer，路由走真 enforce
 // +----------------------------------------------------------------------
 
 package rbac
@@ -39,11 +40,11 @@ func NewPostHandler(svc *PostService, errs *errcode.Registry, hasher *Hasher) *P
 	return &PostHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
 }
 
-func (h *PostHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.GET("/sys/posts", RequirePerm(PermPostList), h.List)
-	rg.POST("/sys/posts", RequirePerm(PermPostCreate), h.Create)
-	rg.PUT("/sys/posts/:id", RequirePerm(PermPostUpdate), h.Update)
-	rg.DELETE("/sys/posts/:id", RequirePerm(PermPostDelete), h.Delete)
+func (h *PostHandler) RegisterRoutes(rg *gin.RouterGroup, authz *AuthzEnforcer) {
+	rg.GET("/sys/posts", authz.RequirePerm(PermPostList), h.List)
+	rg.POST("/sys/posts", authz.RequirePerm(PermPostCreate), h.Create)
+	rg.PUT("/sys/posts/:id", authz.RequirePerm(PermPostUpdate), h.Update)
+	rg.DELETE("/sys/posts/:id", authz.RequirePerm(PermPostDelete), h.Delete)
 }
 
 func (h *PostHandler) List(c *gin.Context) {

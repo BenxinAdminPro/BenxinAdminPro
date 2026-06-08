@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:40:00
 // | @updated   2026-06-07 21:35:00
+// | @updated   2026-06-08 13:00:00  T-003d：补 RegisterRoutes 接线 enforce 测试（无权 403 真触达中间件）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -184,6 +185,43 @@ func TestAuthzNoPermCodePassThrough(t *testing.T) {
 	router.ServeHTTP(w, httptest.NewRequest("GET", "/public", nil))
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200 for route without RequirePerm, got %d", w.Code)
+	}
+}
+
+// TestRegisterRoutesEnforcesPerm 验证 handler.RegisterRoutes 真把 enforce 中间件挂上了
+// （T-003d 修复点）：无权用户被 403 拦在 handler 之前——服务可为 nil，403 路径不触达 handler 体。
+func TestRegisterRoutesEnforcesPerm(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	reg, _ := errcode.NewRegistry(11000)
+	e := newTestEnforcer(t)
+
+	// editor 只有 list，alice 属 editor
+	_, _ = e.AddPolicy("editor", PermUserList, PolicyAct)
+	_, _ = e.AddGroupingPolicy("alice", "editor")
+
+	subjectFn := func(c *gin.Context) string { return c.GetHeader("X-Subject") }
+	ae := NewAuthzEnforcer(e, AuthzConfig{SuperAdminRoles: []string{"super_admin"}}, subjectFn, reg)
+
+	h := NewUserHandler(nil, reg, nil) // 服务 nil：403 路径不触达 handler 体
+	router := gin.New()
+	h.RegisterRoutes(&router.RouterGroup, ae)
+
+	// alice 有 list、无 create：POST /sys/users → 403（enforce 真生效）
+	req := httptest.NewRequest("POST", "/sys/users", nil)
+	req.Header.Set("X-Subject", "alice")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("alice POST /sys/users 应 403（无 create 权限），got %d", w.Code)
+	}
+
+	// bob 无任何角色：GET /sys/users → 403
+	req = httptest.NewRequest("GET", "/sys/users", nil)
+	req.Header.Set("X-Subject", "bob")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("bob GET /sys/users 应 403（无任何权限），got %d", w.Code)
 	}
 }
 

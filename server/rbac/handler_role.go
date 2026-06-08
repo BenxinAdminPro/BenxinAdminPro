@@ -6,6 +6,7 @@
 // | @date      2026-06-07 21:22:00
 // | @updated   2026-06-07 22:50:00
 // | @updated   2026-06-08 02:40:00
+// | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 AuthzEnforcer，路由走真 enforce
 // +----------------------------------------------------------------------
 
 package rbac
@@ -31,13 +32,13 @@ func NewRoleHandler(svc *RoleService, errs *errcode.Registry, hasher *Hasher) *R
 	return &RoleHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
 }
 
-func (h *RoleHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.GET("/sys/roles", RequirePerm("sys:role:list"), h.List)
-	rg.POST("/sys/roles", RequirePerm("sys:role:create"), h.Create)
-	rg.GET("/sys/roles/:id", RequirePerm("sys:role:list"), h.Get)
-	rg.PUT("/sys/roles/:id", RequirePerm("sys:role:update"), h.Update)
-	rg.DELETE("/sys/roles/:id", RequirePerm("sys:role:delete"), h.Delete)
-	rg.PUT("/sys/roles/:id/menus", RequirePerm("sys:role:assign"), h.AssignMenus)
+func (h *RoleHandler) RegisterRoutes(rg *gin.RouterGroup, authz *AuthzEnforcer) {
+	rg.GET("/sys/roles", authz.RequirePerm("sys:role:list"), h.List)
+	rg.POST("/sys/roles", authz.RequirePerm("sys:role:create"), h.Create)
+	rg.GET("/sys/roles/:id", authz.RequirePerm("sys:role:list"), h.Get)
+	rg.PUT("/sys/roles/:id", authz.RequirePerm("sys:role:update"), h.Update)
+	rg.DELETE("/sys/roles/:id", authz.RequirePerm("sys:role:delete"), h.Delete)
+	rg.PUT("/sys/roles/:id/menus", authz.RequirePerm("sys:role:assign"), h.AssignMenus)
 }
 
 func (h *RoleHandler) List(c *gin.Context) {

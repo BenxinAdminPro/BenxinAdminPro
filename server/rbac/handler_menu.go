@@ -6,6 +6,7 @@
 // | @date      2026-06-07 21:24:00
 // | @updated   2026-06-07 22:50:00
 // | @updated   2026-06-08 02:40:00
+// | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 AuthzEnforcer，路由走真 enforce
 // +----------------------------------------------------------------------
 
 package rbac
@@ -31,11 +32,11 @@ func NewMenuHandler(svc *MenuService, errs *errcode.Registry, hasher *Hasher) *M
 	return &MenuHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
 }
 
-func (h *MenuHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.GET("/sys/menus/tree", RequirePerm("sys:menu:list"), h.Tree)
-	rg.POST("/sys/menus", RequirePerm("sys:menu:create"), h.Create)
-	rg.PUT("/sys/menus/:id", RequirePerm("sys:menu:update"), h.Update)
-	rg.DELETE("/sys/menus/:id", RequirePerm("sys:menu:delete"), h.Delete)
+func (h *MenuHandler) RegisterRoutes(rg *gin.RouterGroup, authz *AuthzEnforcer) {
+	rg.GET("/sys/menus/tree", authz.RequirePerm("sys:menu:list"), h.Tree)
+	rg.POST("/sys/menus", authz.RequirePerm("sys:menu:create"), h.Create)
+	rg.PUT("/sys/menus/:id", authz.RequirePerm("sys:menu:update"), h.Update)
+	rg.DELETE("/sys/menus/:id", authz.RequirePerm("sys:menu:delete"), h.Delete)
 }
 
 func (h *MenuHandler) Tree(c *gin.Context) {

@@ -6,6 +6,7 @@
 // | @date      2026-06-07 19:22:00
 // | @updated   2026-06-07 23:46:00
 // | @updated   2026-06-08 02:40:00
+// | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 AuthzEnforcer，路由走真 enforce
 // +----------------------------------------------------------------------
 
 package rbac
@@ -53,16 +54,16 @@ func (h *UserHandler) SetScopeResolver(r ScopeResolver) {
 	h.resolver = r
 }
 
-// RegisterRoutes 注册用户路由（全部挂 RequirePerm）。
-func (h *UserHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.GET("/sys/users", RequirePerm(PermUserList), h.List)
-	rg.POST("/sys/users", RequirePerm(PermUserCreate), h.Create)
-	rg.GET("/sys/users/:id", RequirePerm(PermUserGet), h.Get)
-	rg.PUT("/sys/users/:id", RequirePerm(PermUserUpdate), h.Update)
-	rg.DELETE("/sys/users/:id", RequirePerm(PermUserDelete), h.Delete)
-	rg.PUT("/sys/users/:id/password", RequirePerm(PermUserPassword), h.ResetPassword)
-	rg.PUT("/sys/users/:id/status", RequirePerm(PermUserStatus), h.SetStatus)
-	rg.PUT("/sys/users/:id/roles", RequirePerm(PermUserAssign), h.AssignRoles)
+// RegisterRoutes 注册用户路由（每条经注入的 authz 真 enforce）。
+func (h *UserHandler) RegisterRoutes(rg *gin.RouterGroup, authz *AuthzEnforcer) {
+	rg.GET("/sys/users", authz.RequirePerm(PermUserList), h.List)
+	rg.POST("/sys/users", authz.RequirePerm(PermUserCreate), h.Create)
+	rg.GET("/sys/users/:id", authz.RequirePerm(PermUserGet), h.Get)
+	rg.PUT("/sys/users/:id", authz.RequirePerm(PermUserUpdate), h.Update)
+	rg.DELETE("/sys/users/:id", authz.RequirePerm(PermUserDelete), h.Delete)
+	rg.PUT("/sys/users/:id/password", authz.RequirePerm(PermUserPassword), h.ResetPassword)
+	rg.PUT("/sys/users/:id/status", authz.RequirePerm(PermUserStatus), h.SetStatus)
+	rg.PUT("/sys/users/:id/roles", authz.RequirePerm(PermUserAssign), h.AssignRoles)
 }
 
 func (h *UserHandler) List(c *gin.Context) {

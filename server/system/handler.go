@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 00:30:00
 // | @updated   2026-06-08 02:40:00
+// | @updated   2026-06-08 13:00:00  T-003d：删本地"假"requirePerm，RegisterRoutes 注入 PermGuard 真 enforce
 // +----------------------------------------------------------------------
 
 package system
@@ -17,6 +18,12 @@ import (
 	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
+
+// PermGuard 鉴权中间件工厂：按 perm code 返回路由级 enforce 中间件。
+// 由消费方注入（*rbac.AuthzEnforcer 结构性满足本接口）；system 不直接依赖 rbac，保持解耦。
+type PermGuard interface {
+	RequirePerm(code string) gin.HandlerFunc
+}
 
 // Handler 系统管理 handler。
 type Handler struct {
@@ -31,37 +38,29 @@ func NewHandler(dictSvc *DictService, configSvc *ConfigService, logSvc *LogServi
 	return &Handler{dictSvc: dictSvc, configSvc: configSvc, logSvc: logSvc, errs: errs}
 }
 
-// RegisterRoutes 注册系统管理路由。
-func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
+// RegisterRoutes 注册系统管理路由（每条经注入的 guard 真 enforce）。
+func (h *Handler) RegisterRoutes(rg *gin.RouterGroup, guard PermGuard) {
 	// 字典
-	rg.GET("/sys/dict/types", requirePerm("sys:dict:list"), h.ListDictTypes)
-	rg.POST("/sys/dict/types", requirePerm("sys:dict:create"), h.CreateDictType)
-	rg.PUT("/sys/dict/types/:id", requirePerm("sys:dict:update"), h.UpdateDictType)
-	rg.DELETE("/sys/dict/types/:id", requirePerm("sys:dict:delete"), h.DeleteDictType)
-	rg.GET("/sys/dict/data", requirePerm("sys:dict:list"), h.ListDictData)
-	rg.POST("/sys/dict/data", requirePerm("sys:dict:create"), h.CreateDictData)
-	rg.PUT("/sys/dict/data/:id", requirePerm("sys:dict:update"), h.UpdateDictData)
-	rg.DELETE("/sys/dict/data/:id", requirePerm("sys:dict:delete"), h.DeleteDictData)
+	rg.GET("/sys/dict/types", guard.RequirePerm("sys:dict:list"), h.ListDictTypes)
+	rg.POST("/sys/dict/types", guard.RequirePerm("sys:dict:create"), h.CreateDictType)
+	rg.PUT("/sys/dict/types/:id", guard.RequirePerm("sys:dict:update"), h.UpdateDictType)
+	rg.DELETE("/sys/dict/types/:id", guard.RequirePerm("sys:dict:delete"), h.DeleteDictType)
+	rg.GET("/sys/dict/data", guard.RequirePerm("sys:dict:list"), h.ListDictData)
+	rg.POST("/sys/dict/data", guard.RequirePerm("sys:dict:create"), h.CreateDictData)
+	rg.PUT("/sys/dict/data/:id", guard.RequirePerm("sys:dict:update"), h.UpdateDictData)
+	rg.DELETE("/sys/dict/data/:id", guard.RequirePerm("sys:dict:delete"), h.DeleteDictData)
 
 	// 参数
-	rg.GET("/sys/configs", requirePerm("sys:config:list"), h.ListConfigs)
-	rg.POST("/sys/configs", requirePerm("sys:config:create"), h.CreateConfig)
-	rg.PUT("/sys/configs/:id", requirePerm("sys:config:update"), h.UpdateConfig)
-	rg.DELETE("/sys/configs/:id", requirePerm("sys:config:delete"), h.DeleteConfig)
+	rg.GET("/sys/configs", guard.RequirePerm("sys:config:list"), h.ListConfigs)
+	rg.POST("/sys/configs", guard.RequirePerm("sys:config:create"), h.CreateConfig)
+	rg.PUT("/sys/configs/:id", guard.RequirePerm("sys:config:update"), h.UpdateConfig)
+	rg.DELETE("/sys/configs/:id", guard.RequirePerm("sys:config:delete"), h.DeleteConfig)
 
 	// 日志
-	rg.GET("/sys/logs/oper", requirePerm("sys:operlog:list"), h.ListOperLogs)
-	rg.DELETE("/sys/logs/oper", requirePerm("sys:operlog:clean"), h.CleanOperLogs)
-	rg.GET("/sys/logs/login", requirePerm("sys:loginlog:list"), h.ListLoginLogs)
-	rg.DELETE("/sys/logs/login", requirePerm("sys:loginlog:clean"), h.CleanLoginLogs)
-}
-
-// requirePerm 设置权限码到 context（与 rbac.RequirePerm 同模式）。
-func requirePerm(code string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Set("required_perm_code", code)
-		c.Next()
-	}
+	rg.GET("/sys/logs/oper", guard.RequirePerm("sys:operlog:list"), h.ListOperLogs)
+	rg.DELETE("/sys/logs/oper", guard.RequirePerm("sys:operlog:clean"), h.CleanOperLogs)
+	rg.GET("/sys/logs/login", guard.RequirePerm("sys:loginlog:list"), h.ListLoginLogs)
+	rg.DELETE("/sys/logs/login", guard.RequirePerm("sys:loginlog:clean"), h.CleanLoginLogs)
 }
 
 // --- 字典类型 ---
