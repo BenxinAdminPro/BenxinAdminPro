@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 04:10:00
+// | @updated   2026-06-08 12:00:00  种子密码零明文：全部来自配置，缺失即 fail-fast
 // +----------------------------------------------------------------------
 
 package main
@@ -12,20 +13,42 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/benxin_dev/benxinadminpro-server/auth"
 	"github.com/benxin_dev/benxinadminpro-server/rbac"
 	"gorm.io/gorm"
 )
 
-func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoConfig) {
+// seedPassword 取指定用户的种子密码；零明文默认值，缺失即返回 error（startup fail-fast）。
+func seedPassword(cfg demoConfig, username string) (string, error) {
+	pwd := cfg.SeedPasswords[username]
+	if pwd == "" {
+		return "", fmt.Errorf("seed password for user %q is missing — set seed.%s_password in config.local.yaml "+
+			"(or env DEMO_SEED_%s_PASSWORD); no plaintext default is provided", username, username, strings.ToUpper(username))
+	}
+	return pwd, nil
+}
+
+func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoConfig) error {
 	ctx := context.Background()
 
-	// 超管密码（来自配置，不硬编码）
-	adminPwd := cfg.SeedAdminPwd
-	if adminPwd == "" {
-		adminPwd = "admin123" // 仅 demo 兜底；生产必须配置注入
-		slog.Warn("seed: using default admin password, configure seed.admin_password for production")
+	// 全部种子密码来自配置，任一缺失即 fail-fast（零明文默认值）
+	adminPwd, err := seedPassword(cfg, "admin")
+	if err != nil {
+		return err
+	}
+	editorPwd, err := seedPassword(cfg, "editor")
+	if err != nil {
+		return err
+	}
+	deptMgrPwd, err := seedPassword(cfg, "dept_mgr")
+	if err != nil {
+		return err
+	}
+	bizPwd, err := seedPassword(cfg, "biz_user")
+	if err != nil {
+		return err
 	}
 
 	// ---- 1. 超管角色 ----
@@ -56,18 +79,18 @@ func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoC
 	// 更新密码（如果已存在，密码可能已变）
 	db.Model(&rbac.SysUser{}).Where("username = ?", "admin").Update("password_hash", adminHash)
 
-	// 普通用户
-	editorHash, _ := hasher.Hash("editor123")
+	// 普通用户（密码均来自配置，零明文）
+	editorHash, _ := hasher.Hash(editorPwd)
 	editorDeptID := techDept.ID
 	editorUser := rbac.SysUser{Username: "editor", PasswordHash: editorHash, Nickname: "编辑小明", DeptID: &editorDeptID}
 	db.Where("username = ?", "editor").FirstOrCreate(&editorUser)
 
-	mgrHash, _ := hasher.Hash("manager123")
+	mgrHash, _ := hasher.Hash(deptMgrPwd)
 	mgrDeptID := techDept.ID
 	mgrUser := rbac.SysUser{Username: "dept_mgr", PasswordHash: mgrHash, Nickname: "技术经理", DeptID: &mgrDeptID}
 	db.Where("username = ?", "dept_mgr").FirstOrCreate(&mgrUser)
 
-	bizHash, _ := hasher.Hash("bizuser123")
+	bizHash, _ := hasher.Hash(bizPwd)
 	bizDeptID := bizDept.ID
 	bizUser := rbac.SysUser{Username: "biz_user", PasswordHash: bizHash, Nickname: "业务员", DeptID: &bizDeptID}
 	db.Where("username = ?", "biz_user").FirstOrCreate(&bizUser)
@@ -133,6 +156,7 @@ func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoC
 	}
 
 	slog.Info("seed data applied")
+	return nil
 }
 
 func seedMenu(db *gorm.DB, parentID uint64, menuType, name, permCode, path, component, icon string, sort int) *rbac.SysMenu {

@@ -66,7 +66,13 @@ file:
     url_prefix: "/sys/files/"
 
 seed:
-  admin_password: ""       # 超管初始密码，来自环境变量或此配置
+  # 种子用户初始密码 —— 占位为空，复制为 config.local.yaml 后填入真实值。
+  # 零明文默认值：任一缺失启动即 fail-fast（见 seed.go）。
+  # 生产经环境变量逐项注入（同超管机制）：DEMO_SEED_ADMIN_PASSWORD / DEMO_SEED_EDITOR_PASSWORD ...
+  admin_password: ""       # super_admin 超管
+  editor_password: ""      # editor 编辑员（data_scope=Self）
+  dept_mgr_password: ""    # dept_mgr 部门经理（data_scope=Dept）
+  biz_user_password: ""    # biz_user 业务员（无角色）
 
 redis:
   addr: "localhost:6379"

@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 03:14:00
+// | @updated   2026-06-08 12:30:00  修建表静默失败 bug：先逐行剥 -- 注释再按 ; 切分
 // +----------------------------------------------------------------------
 
 package system
@@ -69,11 +70,11 @@ func (m *Migrator) Up(ctx context.Context) error {
 		// 替换前缀
 		sql := strings.ReplaceAll(string(content), "{{TABLE_PREFIX}}", m.prefix)
 
-		// 执行（可能包含多条语句，需要分号分割）
+		// 执行（先剥整行注释再按分号分割，逐条执行）
 		statements := splitStatements(sql)
 		for _, stmt := range statements {
 			stmt = strings.TrimSpace(stmt)
-			if stmt == "" || strings.HasPrefix(stmt, "--") {
+			if stmt == "" {
 				continue
 			}
 			if err := m.db.WithContext(ctx).Exec(stmt).Error; err != nil {
@@ -125,7 +126,24 @@ func (m *Migrator) getApplied(ctx context.Context) (map[string]bool, error) {
 	return applied, nil
 }
 
-// splitStatements 按分号分割 SQL（简单实现，不处理字符串内分号）。
+// stripLineComments 逐行剥掉以 -- 开头的整行注释（保留语句行）。
+// 注：仅处理整行注释——spec/migrations 的 DDL 不含行内 -- 注释；
+// 这样既清掉文件头注释块，又不会把后面的 CREATE 语句一起吞掉。
+func stripLineComments(sql string) string {
+	lines := strings.Split(sql, "\n")
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "--") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
+}
+
+// splitStatements 先逐行剥掉 -- 注释，再按分号分割（简单实现，不处理字符串内分号）。
+// 旧实现直接 Split(";") 会把"文件头注释 + 首条语句"切成同一块、再被
+// "整块以 -- 开头则跳过"的判断误杀，导致 CREATE 静默不执行（假装迁移成功）。
 func splitStatements(sql string) []string {
-	return strings.Split(sql, ";")
+	return strings.Split(stripLineComments(sql), ";")
 }
