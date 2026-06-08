@@ -8,7 +8,7 @@
 - 架构文档：BenxinAdminPro-架构与规划文档 v1.1
 - 仓库：Gitee 主仓 https://gitee.com/benxin-admin-pro/benxin-admin-pro.git ；GitHub 镜像 https://github.com/BenxinAdminPro/BenxinAdminPro.git（独立于 BenxinKP）
 - 本地：/Users/daxing/projects/BenxinAdminPro（与 BenxinKP 平级，多根工作区聚合）
-- 最后更新：2026-06-08（T-006 阶段一收官）
+- 最后更新：2026-06-07
 
 ## 核心原则（铁律）
 - 业务中立：不进任何业务概念。
@@ -34,8 +34,9 @@
 
 ## 里程碑
 - 🏁 RBAC 整块完成（T-001 安全地基 → T-002 认证 → T-003 组织+RBAC a/b/c）。认证→功能权限→数据权限闭环。HEAD 当时 e167098。
-- 当前 HEAD = 303bf1e（T-005 配置中心收尾）。
-- 🏁 **Go 后端底座五大块全部完成（T-001 安全 / T-002 认证 / T-003 RBAC / T-004 系统管理 / T-005 配置中心）+ 渲染债清。阶段一后端收官，剩 admin 前端 + demo 跑通。**
+- 当前 HEAD = 813dce2（T-006 demo + T-003d 鉴权接线，阶段一后端真·收官）。
+- 🏁 **Go 后端底座五大块全部完成（T-001 安全 / T-002 认证 / T-003 RBAC / T-004 系统管理 / T-005 配置中心）+ 渲染债清（T-004c）。**
+- 🏁 **T-006 demo 真·跑通（e2e 冒烟 8 步 ALL PASSED）+ T-003d 鉴权接线修复。阶段一后端可信收官，下一步 admin 前端。** 注：demo 装配过程逼出并修掉三个潜伏缺陷（#4 casbin 版本冲突 / #5 迁移器静默不建表 / #3 功能权限 enforce 未接线），均在远程仍干净时拦下。
 
 ## 切片进度
 
@@ -50,8 +51,9 @@
 | T-004a | 系统管理（response Registry 接管 + 字典 + 参数 + 操作日志 + 登录日志） | ✅ 至 f1594d0。详见下方记录。 |
 | T-004b | 文件管理 + 存储驱动（StorageDriver + LocalDriver + 鉴权下载 + 上传安全） | ✅ 至 448671f。T-004 整块完成。详见下方记录。 |
 | T-004c | 渲染收敛（handler 统一 response.Render + errcode 降级纯常量） | ✅ 至 589f9e1。纯重构，对外零行为变化。 |
-| T-005 | 配置中心（动态参数缓存 + 热加载 Pub/Sub + GCM 加密 + 迁移执行器） | ✅ 至 303bf1e |
-| T-006 | examples/demo 装配（五大块全链路 + 种子数据 + 迁移建表）| ✅ 阶段一收官 |
+| T-005 | 配置中心（动态参数缓存 + 热加载 Pub/Sub + GCM 加密 + 迁移执行器） | ✅ 至 303bf1e。详见下方记录。 |
+| T-003d | RBAC 鉴权接线修复（消除假 RequirePerm + RegisterRoutes 注入真 enforce） | ✅ 至 813dce2。修 T-003b 接线缺陷。详见下方记录。 |
+| T-006 | examples/demo 装配 + 全链路 e2e 跑通（含 #4/#5 缺陷修复） | ✅ 双推完成（至 813dce2）。demo 真·跑通。详见下方记录。 |
 
 **T-001~T-003 收尾记录**（详见此前版本，要点）
 - T-001 crypto/auth/rbac 三核心 + crypto-vectors KAT + DI；集成测试真后端。
@@ -94,6 +96,18 @@
 - **SQL 迁移执行器 migrator.go（还历史债）：读 spec/migrations、文件名字典序排序、{{TABLE_PREFIX}} 替换、按序执行、sys_migration 记录版本+校验和、幂等跳过已执行、失败中止报告。** 替代此前集成测试手动 ReplaceAll，demo 可一键建表。
 - errcode +80~81，回归快照 40/40。openapi v0.8.0（redocly 0 error）。commit 1c339e2+303bf1e。
 
+**T-006 + T-003d 收尾记录（PM 评审定档，阶段一后端可信收官）**
+- 经过：上个会话提交了 T-006 装配（d601de6）并自行把 PROJECT_STATUS 改写为"完成"——但两个必补项（e2e 冒烟、种子去硬编码）均未落地、未推送、未经 PM 批准。本会话接续后核出抢跑，要求补齐；补的过程中 demo e2e 逐层逼出三个潜伏缺陷。**教训：账本完成判定权在 PM，执行端不得自标完成/自行双推。**
+- **demo（server/examples/demo）= 装配样例 + 回归环境**：迁移执行器一键建表 → 装配五大块具体实现（CBC中间件+GCM crypter / TokenService+Argon2id+captcha+Redis Stores+GormUserProvider+LoginLogger / Enforcer+PolicySync+AuthzEnforcer+超管+hashid+ScopeResolver / 字典参数日志文件+操作日志中间件 / ConfigCenter+RedisCache+Pub-Sub / response.Registry 全码注册）→ 装配自检（关键依赖非 nil fail-fast）→ 种子数据（超管/3角色/3部门/4用户/菜单权限+Casbin ReloadAll，幂等）。
+- 种子密码去硬编码：seedPassword() 零明文默认值、缺失 fail-fast、全来自 cfg.SeedPasswords；env replacer 修复（之前 env 覆盖其实失效）；config.example.yaml 占位、真值走 *.local.yaml(gitignore)。
+- **#4 casbin 版本冲突修复**：gorm-adapter/v3 钉 v3.38.0（最后一个依赖 casbin v2 的版本），casbin/v3 indirect 消失，NewEnforcer 不再 panic；casbin v2 路径/model.conf/PHP parity 零影响。
+- **#5 迁移器静默不建表修复（T-005 恶性 bug）**：splitStatements 旧版把"注释头+CREATE"切成一块当纯注释跳过 → 一张表不建、却记 sys_migration 当已执行（假阳性、幂等永久跳过）。修：stripLineComments 逐行剥 -- 注释再 Split(;)、删脆弱前缀判断。回归断言 migrator_integration_test.go：真库建表数=16、15 表 HasTable 逐一验真存在、ALTER 列(is_encrypted/data_scope)验、sys_migration 记录数==18 文件数。
+- **#3 / T-003d 鉴权接线修复（修 T-003b 缺陷）**：rbac 原有两个同名 RequirePerm（AuthzEnforcer.RequirePerm 真 enforce + 包级假版只设 context 不鉴权），RegisterRoutes 硬编码用了假版 → 功能权限装配层完全没生效（e2e 坐实 editor 仅 list 权却能 POST 建用户得 200）。修：**删除式消除假 RequirePerm（包级 RequirePerm/Authz、system 本地 requirePerm 全删，grep 无残留）**；RegisterRoutes 注入鉴权（rbac 用 *AuthzEnforcer、system 用 PermGuard 接口零耦合无环）；路由级闭包捕获 code 真 enforce（不依赖全局中间件读 context，修旧根源）；超管短路保留。**46 条受保护路由全真 enforce**（rbac 26 + system 20），无裸奔（auth_info JWT-only by design 读用户自身数据，auth/* 公开）。RegisterRoutes 签名变更属对外契约变更（消费方装配须注入 enforcer）。
+- 验证三重证据：grep 无假版 + 单测（TestRegisterRoutesEnforcesPerm 经真 RegisterRoutes 验 403）+ **demo e2e 8 步 ALL PASSED（迁移16表→种子→captcha→login→200→401→第7步403→热加载）**。commit 99716da(T-006)+813dce2(T-003d)，d601de6 为上个会话装配基础。
+
+**待 daxing 真人验收（用到时补，不阻塞）**
+- 各片历史验收项见对应记录。demo 已用 e2e 自动覆盖大部分链路；真人可照 server/examples/demo/README.md 清单复核（登录全流程/RBAC 增删改/数据权限范围/加密参数脱敏/文件上传下载/无权403/超管放行）。
+
 **待 daxing 真人验收（用到时补，不阻塞）**
 - 各片历史验收项见对应记录。
 - T-004a：demo 字典/参数 CRUD + 操作/登录日志查看；确认日志无敏感信息；确认错误码返回与迁移前一致；评审 Registry 业务模块可注册。
@@ -104,9 +118,8 @@
 | — | — | — | 无 |
 
 ### 下一步（计划）
-1. **examples/demo 跑通**（登录+RBAC+配置+日志全链路）：用迁移执行器一键建表、装配 GormUserProvider/Redis 各 Store/ConfigCenter/hasher，串通五大块；**一次性兑现历次积压的 daxing 真人验收项**。不依赖前端。
-2. admin 前端（布局/动态路由/权限/x-table）：在 demo 验证过的可信后端上联调。
-> 建议执行顺序：demo 跑通（验证后端协同 + 清积压验收）→ admin 前端。前端联调时后端已是已验证状态。
+1. **admin 前端**（布局/动态路由/权限指令/x-table 配置化 CRUD/请求封装含加密层+错误码/主题/i18n）：在 demo 已 e2e 验证的可信后端上联调。注意消费 T-003d 后的接线（RegisterRoutes 注入 enforcer）与统一响应包络。
+> demo 已真·跑通，后端为已验证状态；前端联调可信任后端契约。
 
 ### 阶段二（底座可用后）
 - BenxinKP 引入 BenxinAdminPro，只写业务；backend-php 照 spec 实现 parity。
@@ -126,4 +139,7 @@
 - 设计硬约束：表前缀随实例走禁包级（T-003a）；未完成切片接口至少挂 JWT；对外 ID 入出参 hashid 闭环+装配注入 hasher（T-003b）；授权变更事务内回滚保一致（T-003b）；数据权限失败一律收紧绝不放宽（T-003c）；日志脱敏+异步不阻塞、auth 不因日志依赖 DB（T-004a）。
 - 错误码：crypto/auth（T-001/T-002）、sys（T-003 +30~+50）、system（T-004a +60~+63）、file（T-004b +70~+75）；response.Registry 为唯一注册/渲染权威（T-004c 已收敛）；errcode 已降级为纯常量（Code 载体，剥离 HTTP/Message）；段不破坏、冲突 fail-fast。
 - Casbin obj=perm code（非 URL），命名 模块:资源:动作（sys:user:list）；底座只放 sys:* 通用权限点。
+- **流程铁律（T-006 教训）：账本完成判定权在 PM，执行端不得自标"完成"、不得自行双推、不得擅改 PROJECT_STATUS；切片必须经 PM 评审 + 双推确认才翻 ✅。**
+- **测试铁律（#3/#4/#5 教训）：单测/集成"全绿" ≠ 装配能跑——三个潜伏缺陷都是 go build 通过、各模块单测绿，但真装配运行才暴露。凡被多模块组装的能力（demo、将来 BenxinKP 接入、前端联调），必须有真跑的端到端测试兜底，不能只验单模块零件。**
+- 待办：rbac/system 既有集成测试硬编码 localhost:3306，理想应改 env 可覆盖（参考 e2e/migrator 已支持 3307）；将来顺手收。
 - git 经验：镜像仓建仓勿勾初始化文件否则首推 force；token 走交互式/钥匙串勿写进 remote url；GitHub/Gitee 偶发 SSL_ERROR_SYSCALL 重试即可（近期转频，必要时走代理/SSH）。
