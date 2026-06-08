@@ -18,6 +18,7 @@ import router from './router'
 import pinia from './store'
 import i18n from './i18n'
 import { initTheme } from './theme'
+import { permission } from './directives/permission'
 import './styles/index.scss'
 
 initTheme()
@@ -27,4 +28,5 @@ app.use(pinia)
 app.use(router)
 app.use(i18n)
 app.use(ElementPlus)
+app.directive('permission', permission)
 app.mount('#app')

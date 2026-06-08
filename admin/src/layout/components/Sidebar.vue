@@ -1,10 +1,11 @@
 <!--
   +----------------------------------------------------------------------
   | @project   本心通用管理后台 / BenxinAdminPro
-  | @mission   侧边栏 — Logo + 菜单（T-007a 静态占位；T-007b 接 /sys/auth/menus 动态生成）
+  | @mission   侧边栏 — Logo + 动态菜单（消费 store.menuTree，T-007b）
   | @author    仗键天涯(daxing)
   | @email     3442535897@qq.com
   | @date      2026-06-08 14:00:00
+  | @updated   2026-06-08 16:00:00  T-007b：菜单改为按后端 menus 动态渲染（递归 SidebarItem）
   +----------------------------------------------------------------------
 -->
 <script setup lang="ts">
@@ -12,11 +13,16 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { HomeFilled } from '@element-plus/icons-vue'
+import { useUserStore } from '@/store/user'
+import SidebarItem from './SidebarItem.vue'
 
 defineProps<{ collapse: boolean }>()
 const route = useRoute()
 const { t } = useI18n()
+const user = useUserStore()
 const activeMenu = computed(() => route.path)
+// 顶层只渲染 M/C（F 不进侧栏）
+const topMenus = computed(() => user.menuTree.filter((m) => m.menu_type === 'M' || m.menu_type === 'C'))
 </script>
 
 <template>
@@ -27,11 +33,13 @@ const activeMenu = computed(() => route.path)
     </div>
     <el-scrollbar>
       <el-menu :collapse="collapse" :default-active="activeMenu" router unique-opened>
-        <!-- 静态占位菜单；动态路由 + 按钮权限留 T-007b -->
+        <!-- 固定首页 -->
         <el-menu-item index="/dashboard">
           <el-icon><HomeFilled /></el-icon>
           <template #title>{{ t('layout.dashboard') }}</template>
         </el-menu-item>
+        <!-- 动态菜单（后端 menus） -->
+        <SidebarItem v-for="node in topMenus" :key="node.id" :node="node" />
       </el-menu>
     </el-scrollbar>
   </div>
