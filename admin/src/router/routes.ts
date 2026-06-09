@@ -5,6 +5,7 @@
  * | @author    仗键天涯(daxing)
  * | @email     3442535897@qq.com
  * | @date      2026-06-08 14:00:00
+ * | @updated   2026-06-09 14:30:00  T-007c：挂 x-table 增强 harness 静态路由（目视验证用）
  * +----------------------------------------------------------------------
  */
 import type { RouteRecordRaw } from 'vue-router'
@@ -31,6 +32,13 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: 'dashboard',
         component: () => import('@/views/home/index.vue'),
         meta: { title: 'layout.dashboard', icon: 'HomeFilled' },
+      },
+      {
+        // T-007c x-table 增强目视验证页（mock 数据，不依赖后端、不入业务菜单）。
+        path: 'dev/xtable-harness',
+        name: 'dev-xtable-harness',
+        component: () => import('@/views/dev/xtable-harness/index.vue'),
+        meta: { title: 'x-table Harness' },
       },
     ],
   },

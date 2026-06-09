@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 04:10:00
 // | @updated   2026-06-08 12:00:00  种子密码零明文：全部来自配置，缺失即 fail-fast
+// | @updated   2026-06-09 16:10:00  T-007c：补齐既有 C 页缺失的 F 权限码（对齐后端路由 RequirePerm）
 // +----------------------------------------------------------------------
 
 package main
@@ -109,25 +110,40 @@ func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoC
 	seedMenu(db, userPage.ID, "F", "用户删除", "sys:user:delete", "", "", "", 4)
 	seedMenu(db, userPage.ID, "F", "重置密码", "sys:user:password", "", "", "", 5)
 	seedMenu(db, userPage.ID, "F", "分配角色", "sys:user:assign", "", "", "", 6)
+	seedMenu(db, userPage.ID, "F", "用户详情", "sys:user:get", "", "", "", 7)
+	seedMenu(db, userPage.ID, "F", "用户状态", "sys:user:status", "", "", "", 8)
 
 	deptPage := seedMenu(db, sysDir.ID, "C", "部门管理", "", "/sys/dept", "sys/dept/index", "tree", 2)
 	seedMenu(db, deptPage.ID, "F", "部门树", "sys:dept:tree", "", "", "", 1)
 	seedMenu(db, deptPage.ID, "F", "部门新增", "sys:dept:create", "", "", "", 2)
+	seedMenu(db, deptPage.ID, "F", "部门编辑", "sys:dept:update", "", "", "", 3)
+	seedMenu(db, deptPage.ID, "F", "部门删除", "sys:dept:delete", "", "", "", 4)
 
 	rolePage := seedMenu(db, sysDir.ID, "C", "角色管理", "", "/sys/role", "sys/role/index", "peoples", 3)
 	seedMenu(db, rolePage.ID, "F", "角色列表", "sys:role:list", "", "", "", 1)
 	seedMenu(db, rolePage.ID, "F", "角色新增", "sys:role:create", "", "", "", 2)
 	seedMenu(db, rolePage.ID, "F", "分配菜单", "sys:role:assign", "", "", "", 3)
+	seedMenu(db, rolePage.ID, "F", "角色编辑", "sys:role:update", "", "", "", 4)
+	seedMenu(db, rolePage.ID, "F", "角色删除", "sys:role:delete", "", "", "", 5)
 
 	menuPage := seedMenu(db, sysDir.ID, "C", "菜单管理", "", "/sys/menu", "sys/menu/index", "tree-table", 4)
 	seedMenu(db, menuPage.ID, "F", "菜单列表", "sys:menu:list", "", "", "", 1)
 	seedMenu(db, menuPage.ID, "F", "菜单新增", "sys:menu:create", "", "", "", 2)
+	seedMenu(db, menuPage.ID, "F", "菜单编辑", "sys:menu:update", "", "", "", 3)
+	seedMenu(db, menuPage.ID, "F", "菜单删除", "sys:menu:delete", "", "", "", 4)
 
 	dictPage := seedMenu(db, sysDir.ID, "C", "字典管理", "", "/sys/dict", "sys/dict/index", "dict", 5)
 	seedMenu(db, dictPage.ID, "F", "字典查看", "sys:dict:list", "", "", "", 1)
+	seedMenu(db, dictPage.ID, "F", "字典新增", "sys:dict:create", "", "", "", 2)
+	seedMenu(db, dictPage.ID, "F", "字典编辑", "sys:dict:update", "", "", "", 3)
+	seedMenu(db, dictPage.ID, "F", "字典删除", "sys:dict:delete", "", "", "", 4)
 
 	configPage := seedMenu(db, sysDir.ID, "C", "参数管理", "", "/sys/config", "sys/config/index", "edit", 6)
 	seedMenu(db, configPage.ID, "F", "参数查看", "sys:config:list", "", "", "", 1)
+	seedMenu(db, configPage.ID, "F", "参数新增", "sys:config:create", "", "", "", 2)
+	seedMenu(db, configPage.ID, "F", "参数编辑", "sys:config:update", "", "", "", 3)
+	seedMenu(db, configPage.ID, "F", "参数删除", "sys:config:delete", "", "", "", 4)
+	seedMenu(db, configPage.ID, "F", "敏感值查看", "sys:secret:view", "", "", "", 5)
 
 	// ---- 6. 给编辑员角色分配部分权限 ----
 	var allMenuIDs []uint64
