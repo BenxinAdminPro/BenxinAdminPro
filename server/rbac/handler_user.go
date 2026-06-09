@@ -7,6 +7,7 @@
 // | @updated   2026-06-07 23:46:00
 // | @updated   2026-06-08 02:40:00
 // | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 AuthzEnforcer，路由走真 enforce
+// | @updated   2026-06-09 10:40:13  T-003e：入参对外 ID 收口 — dept_id/post_ids/role_ids 收 hashid
 // +----------------------------------------------------------------------
 
 package rbac
@@ -66,10 +67,108 @@ func (h *UserHandler) RegisterRoutes(rg *gin.RouterGroup, authz *AuthzEnforcer) 
 	rg.PUT("/sys/users/:id/roles", authz.RequirePerm(PermUserAssign), h.AssignRoles)
 }
 
+// --- 入参请求 DTO（对外 ID 为 hashid 字符串，handler 边界解码为内部 uint64）---
+
+// userListReq 用户列表查询入参。dept_id 为 hashid 过滤。
+type userListReq struct {
+	Username string `form:"username"`
+	Status   *int8  `form:"status"`
+	DeptID   string `form:"dept_id"` // hashid，空=不过滤
+	Page     int    `form:"page"`
+	PageSize int    `form:"page_size"`
+}
+
+func (r *userListReq) toQuery(h *Hasher) (UserListQuery, error) {
+	deptID, err := decodeOptionalID(h, r.DeptID)
+	if err != nil {
+		return UserListQuery{}, err
+	}
+	return UserListQuery{
+		Username: r.Username,
+		Status:   r.Status,
+		DeptID:   deptID,
+		Page:     r.Page,
+		PageSize: r.PageSize,
+	}, nil
+}
+
+// createUserReq 创建用户入参。dept_id/post_ids 为 hashid。
+type createUserReq struct {
+	Username string   `json:"username" binding:"required"`
+	Password string   `json:"password" binding:"required"`
+	Nickname string   `json:"nickname"`
+	Avatar   string   `json:"avatar"`
+	Email    string   `json:"email"`
+	Mobile   string   `json:"mobile"`
+	DeptID   string   `json:"dept_id"` // hashid，空=无部门
+	Status   int8     `json:"status"`
+	Remark   string   `json:"remark"`
+	PostIDs  []string `json:"post_ids"` // hashid[]
+}
+
+func (r *createUserReq) toInput(h *Hasher) (CreateUserInput, error) {
+	deptID, err := decodeOptionalID(h, r.DeptID)
+	if err != nil {
+		return CreateUserInput{}, err
+	}
+	postIDs, err := decodeIDSlice(h, r.PostIDs)
+	if err != nil {
+		return CreateUserInput{}, err
+	}
+	return CreateUserInput{
+		Username: r.Username,
+		Password: r.Password,
+		Nickname: r.Nickname,
+		Avatar:   r.Avatar,
+		Email:    r.Email,
+		Mobile:   r.Mobile,
+		DeptID:   deptID,
+		Status:   r.Status,
+		Remark:   r.Remark,
+		PostIDs:  postIDs,
+	}, nil
+}
+
+// updateUserReq 更新用户入参。dept_id/post_ids 为 hashid。
+type updateUserReq struct {
+	Nickname string   `json:"nickname"`
+	Avatar   string   `json:"avatar"`
+	Email    string   `json:"email"`
+	Mobile   string   `json:"mobile"`
+	DeptID   string   `json:"dept_id"`  // hashid，空=清空部门
+	Remark   string   `json:"remark"`
+	PostIDs  []string `json:"post_ids"` // hashid[]，缺省=不变，[]=清空
+}
+
+func (r *updateUserReq) toInput(h *Hasher) (UpdateUserInput, error) {
+	deptID, err := decodeOptionalID(h, r.DeptID)
+	if err != nil {
+		return UpdateUserInput{}, err
+	}
+	postIDs, err := decodeIDSlice(h, r.PostIDs)
+	if err != nil {
+		return UpdateUserInput{}, err
+	}
+	return UpdateUserInput{
+		Nickname: r.Nickname,
+		Avatar:   r.Avatar,
+		Email:    r.Email,
+		Mobile:   r.Mobile,
+		DeptID:   deptID,
+		Remark:   r.Remark,
+		PostIDs:  postIDs,
+	}, nil
+}
+
 func (h *UserHandler) List(c *gin.Context) {
-	var q UserListQuery
-	if err := c.ShouldBindQuery(&q); err != nil {
+	var req userListReq
+	if err := c.ShouldBindQuery(&req); err != nil {
 		response.BadReq(c)
+		return
+	}
+	q, err := req.toQuery(h.hasher)
+	if err != nil {
+		response.AbortErr(c, h.errs.ErrInvalidID.Code)
 		return
 	}
 	// 注入数据权限（从服务端取，不接受客户端传入）
@@ -96,9 +195,14 @@ func (h *UserHandler) List(c *gin.Context) {
 }
 
 func (h *UserHandler) Create(c *gin.Context) {
-	var in CreateUserInput
-	if err := c.ShouldBindJSON(&in); err != nil {
+	var req createUserReq
+	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadReq(c)
+		return
+	}
+	in, err := req.toInput(h.hasher)
+	if err != nil {
+		response.AbortErr(c, h.errs.ErrInvalidID.Code)
 		return
 	}
 	user, err := h.svc.Create(c.Request.Context(), in)
@@ -135,9 +239,14 @@ func (h *UserHandler) Update(c *gin.Context) {
 	if err != nil {
 		return
 	}
-	var in UpdateUserInput
-	if err := c.ShouldBindJSON(&in); err != nil {
+	var req updateUserReq
+	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadReq(c)
+		return
+	}
+	in, err := req.toInput(h.hasher)
+	if err != nil {
+		response.AbortErr(c, h.errs.ErrInvalidID.Code)
 		return
 	}
 	if err := h.svc.Update(c.Request.Context(), id, in); err != nil {
@@ -203,13 +312,18 @@ func (h *UserHandler) AssignRoles(c *gin.Context) {
 		return
 	}
 	var req struct {
-		RoleIDs []uint64 `json:"role_ids"`
+		RoleIDs []string `json:"role_ids"` // hashid[]
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadReq(c)
 		return
 	}
-	if err := h.svc.AssignRoles(c.Request.Context(), id, req.RoleIDs); err != nil {
+	roleIDs, err := decodeIDSlice(h.hasher, req.RoleIDs)
+	if err != nil {
+		response.AbortErr(c, h.errs.ErrInvalidID.Code)
+		return
+	}
+	if err := h.svc.AssignRoles(c.Request.Context(), id, roleIDs); err != nil {
 		response.ErrResp(c, err)
 		return
 	}

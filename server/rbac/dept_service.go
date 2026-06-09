@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:15:00
+// | @updated   2026-06-09 10:40:13  T-003e：parent_id 降级 json:"-"（由 handler 解码注入）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -21,7 +22,7 @@ import (
 
 // CreateDeptInput 创建部门请求。
 type CreateDeptInput struct {
-	ParentID uint64 `json:"parent_id"`
+	ParentID uint64 `json:"-"` // 内部 ID，由 handler 解码 hashid 注入
 	Name     string `json:"name" binding:"required"`
 	Sort     int    `json:"sort"`
 	Leader   string `json:"leader"`
@@ -30,7 +31,7 @@ type CreateDeptInput struct {
 
 // UpdateDeptInput 更新部门请求。
 type UpdateDeptInput struct {
-	ParentID *uint64 `json:"parent_id"` // 指针，允许移动
+	ParentID *uint64 `json:"-"` // 内部 ID（指针保留移动语义），由 handler 解码 hashid 注入
 	Name     string  `json:"name"`
 	Sort     int     `json:"sort"`
 	Leader   string  `json:"leader"`

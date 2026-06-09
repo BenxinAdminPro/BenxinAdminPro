@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:12:00
 // | @updated   2026-06-07 23:44:00
+// | @updated   2026-06-09 10:40:13  T-003e：对外 ID 字段降级 json:"-"（由 handler 解码注入，非裸绑定）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -27,10 +28,10 @@ type CreateUserInput struct {
 	Avatar   string   `json:"avatar"`
 	Email    string   `json:"email"`
 	Mobile   string   `json:"mobile"`
-	DeptID   *uint64  `json:"dept_id"`
+	DeptID   *uint64  `json:"-"` // 内部 ID，由 handler 解码 hashid 注入
 	Status   int8     `json:"status"`
 	Remark   string   `json:"remark"`
-	PostIDs  []uint64 `json:"post_ids"`
+	PostIDs  []uint64 `json:"-"` // 内部 ID，由 handler 解码 hashid 注入
 }
 
 // UpdateUserInput 更新用户请求（不含密码）。
@@ -39,16 +40,16 @@ type UpdateUserInput struct {
 	Avatar   string   `json:"avatar"`
 	Email    string   `json:"email"`
 	Mobile   string   `json:"mobile"`
-	DeptID   *uint64  `json:"dept_id"`
+	DeptID   *uint64  `json:"-"` // 内部 ID，由 handler 解码 hashid 注入
 	Remark   string   `json:"remark"`
-	PostIDs  []uint64 `json:"post_ids"`
+	PostIDs  []uint64 `json:"-"` // 内部 ID，由 handler 解码 hashid 注入
 }
 
 // UserListQuery 用户列表查询参数。
 type UserListQuery struct {
 	Username string     `form:"username"`
 	Status   *int8      `form:"status"`
-	DeptID   *uint64    `form:"dept_id"`
+	DeptID   *uint64    `form:"-"` // 内部 ID，由 handler 解码 hashid 注入
 	Page     int        `form:"page"`
 	PageSize int        `form:"page_size"`
 	Scope    *DataScope `form:"-"` // 由 handler 注入，禁止客户端传入

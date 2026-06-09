@@ -7,6 +7,7 @@
 // | @updated   2026-06-07 22:50:00
 // | @updated   2026-06-08 02:40:00
 // | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 AuthzEnforcer，路由走真 enforce
+// | @updated   2026-06-09 10:40:13  T-003e：分配菜单 menu_ids 入参收 hashid
 // +----------------------------------------------------------------------
 
 package rbac
@@ -85,10 +86,12 @@ func (h *RoleHandler) AssignMenus(c *gin.Context) {
 	id, err := h.parseHID(c, "id")
 	if err != nil { return }
 	var req struct {
-		MenuIDs []uint64 `json:"menu_ids"`
+		MenuIDs []string `json:"menu_ids"` // hashid[]
 	}
 	if err := c.ShouldBindJSON(&req); err != nil { response.BadReq(c); return }
-	if err := h.svc.AssignMenus(c.Request.Context(), id, req.MenuIDs); err != nil { response.ErrResp(c, err); return }
+	menuIDs, err := decodeIDSlice(h.hasher, req.MenuIDs)
+	if err != nil { response.AbortErr(c, h.errs.ErrInvalidID.Code); return }
+	if err := h.svc.AssignMenus(c.Request.Context(), id, menuIDs); err != nil { response.ErrResp(c, err); return }
 	response.OK(c, nil)
 }
 

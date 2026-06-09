@@ -1,10 +1,11 @@
 # +----------------------------------------------------------------------
 # | @project   本心通用管理后台 / BenxinAdminPro
-# | @mission   OpenAPI 3.0 规范 v0.8.0 — 全底座 API 规范
+# | @mission   OpenAPI 3.0 规范 v0.9.0 — 全底座 API 规范
 # | @author    仗键天涯(daxing)
 # | @email     3442535897@qq.com
 # | @date      2026-06-07 14:19:00
 # | @updated   2026-06-08 03:25:00
+# | @updated   2026-06-09 10:40:13  T-003e：对外 ID 入参收口 hashid，入出参对称
 # +----------------------------------------------------------------------
 
 openapi: "3.0.3"
@@ -22,7 +23,12 @@ info:
     v0.7.0: 文件管理（StorageDriver + 本地驱动 + 鉴权下载 + 上传安全）。
     v0.8.0: 配置中心（缓存+热加载+GCM加密+迁移执行器）。
     v0.8.1: 验证码修复（开源字体渲染清晰字符 + /auth/precheck 告知是否需要验证码，前端按需显示）。
-  version: "0.8.1"
+    v0.9.0: 对外 ID 入参收口 hashid（T-003e）。RBAC 实体（用户/部门/岗位/角色/菜单）的对外 ID
+            入出参均为 hashid 字符串（path :id、body dept_id/post_ids/role_ids/menu_ids/parent_id、
+            query dept_id），与出参对称；非法/伪造 hashid 一律 400，绝不回落、不暴露内部自增 id。
+            PHP parity 约定：上述对外 ID 字段在请求与响应中均为 hashid 字符串，禁裸自增整数。
+            注：系统管理实体（字典/参数/文件）当前仍为整数主键，整体 hashid 化为独立切片，不在本片。
+  version: "0.9.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -171,13 +177,13 @@ components:
     SysUser:
       type: object
       properties:
-        id: { type: integer, format: int64 }
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
         username: { type: string }
         nickname: { type: string }
         avatar: { type: string }
         email: { type: string }
         mobile: { type: string }
-        dept_id: { type: integer, format: int64, nullable: true }
+        dept_id: { type: string, nullable: true, description: "部门对外 ID(hashid)，无部门=null" }
         status: { type: integer }
         remark: { type: string }
         created_at: { type: string, format: date-time }
@@ -186,8 +192,8 @@ components:
     SysDept:
       type: object
       properties:
-        id: { type: integer, format: int64 }
-        parent_id: { type: integer, format: int64 }
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
+        parent_id: { type: string, description: "父级对外 ID(hashid)，空=根" }
         ancestors: { type: string }
         name: { type: string }
         sort: { type: integer }
@@ -200,7 +206,7 @@ components:
     SysPost:
       type: object
       properties:
-        id: { type: integer, format: int64 }
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
         code: { type: string }
         name: { type: string }
         sort: { type: integer }
@@ -209,7 +215,7 @@ components:
     SysRole:
       type: object
       properties:
-        id: { type: integer, format: int64 }
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
         code: { type: string }
         name: { type: string }
         sort: { type: integer }
@@ -224,8 +230,8 @@ components:
     SysMenu:
       type: object
       properties:
-        id: { type: integer, format: int64 }
-        parent_id: { type: integer, format: int64 }
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
+        parent_id: { type: string, description: "父级对外 ID(hashid)，空=根" }
         ancestors: { type: string }
         menu_type: { type: string, enum: [M, C, F] }
         name: { type: string }
@@ -257,11 +263,11 @@ components:
         nickname: { type: string }
         email: { type: string }
         mobile: { type: string }
-        dept_id: { type: integer, format: int64 }
+        dept_id: { type: string, description: "部门对外 ID(hashid)，空=无部门" }
         status: { type: integer }
         post_ids:
           type: array
-          items: { type: integer, format: int64 }
+          items: { type: string, description: "岗位对外 ID(hashid)" }
 
   responses:
     EncryptedResponse:
@@ -463,7 +469,7 @@ paths:
       parameters:
         - { name: username, in: query, schema: { type: string } }
         - { name: status, in: query, schema: { type: integer } }
-        - { name: dept_id, in: query, schema: { type: integer } }
+        - { name: dept_id, in: query, schema: { type: string }, description: "按部门过滤，对外 ID(hashid)" }
         - { name: page, in: query, schema: { type: integer, default: 1 } }
         - { name: page_size, in: query, schema: { type: integer, default: 20 } }
       responses:
@@ -506,7 +512,7 @@ paths:
       operationId: getUser
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }
       responses:
         "200":
           description: 用户详情
@@ -524,7 +530,7 @@ paths:
       operationId: updateUser
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }
       requestBody:
         required: true
         content:
@@ -542,7 +548,7 @@ paths:
       operationId: deleteUser
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }
       responses:
         "200":
           description: 删除成功
@@ -557,7 +563,7 @@ paths:
       operationId: resetUserPassword
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }
       requestBody:
         required: true
         content:
@@ -581,7 +587,7 @@ paths:
       operationId: setUserStatus
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }
       requestBody:
         required: true
         content:
@@ -647,7 +653,7 @@ paths:
       operationId: updateDept
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }
       requestBody:
         required: true
         content:
@@ -665,7 +671,7 @@ paths:
       operationId: deleteDept
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }
       responses:
         "200":
           description: 删除成功
@@ -722,7 +728,7 @@ paths:
       operationId: updatePost
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }
       requestBody:
         required: true
         content:
@@ -740,7 +746,7 @@ paths:
       operationId: deletePost
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }
       responses:
         "200":
           description: 删除成功
@@ -835,7 +841,7 @@ paths:
             schema:
               type: object
               properties:
-                menu_ids: { type: array, items: { type: integer } }
+                menu_ids: { type: array, items: { type: string, description: "菜单/权限对外 ID(hashid)" } }
       responses:
         "200":
           description: 成功
@@ -919,7 +925,7 @@ paths:
             schema:
               type: object
               properties:
-                role_ids: { type: array, items: { type: integer } }
+                role_ids: { type: array, items: { type: string, description: "角色对外 ID(hashid)" } }
       responses:
         "200":
           description: 成功

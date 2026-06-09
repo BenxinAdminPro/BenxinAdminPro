@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:12:00
+// | @updated   2026-06-09 10:40:13  T-003e：parent_id 降级 json:"-"（由 handler 解码注入）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -20,7 +21,7 @@ import (
 )
 
 type CreateMenuInput struct {
-	ParentID  uint64 `json:"parent_id"`
+	ParentID  uint64 `json:"-"` // 内部 ID，由 handler 解码 hashid 注入
 	MenuType  string `json:"menu_type" binding:"required"`
 	Name      string `json:"name" binding:"required"`
 	PermCode  string `json:"perm_code"`
@@ -33,7 +34,7 @@ type CreateMenuInput struct {
 }
 
 type UpdateMenuInput struct {
-	ParentID  *uint64 `json:"parent_id"`
+	ParentID  *uint64 `json:"-"` // 内部 ID（指针保留移动语义），由 handler 解码 hashid 注入
 	MenuType  string  `json:"menu_type"`
 	Name      string  `json:"name"`
 	PermCode  string  `json:"perm_code"`
