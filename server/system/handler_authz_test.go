@@ -34,7 +34,7 @@ func (g *recordingGuard) RequirePerm(code string) gin.HandlerFunc {
 func TestSystemHandlerRegisterRoutesWiresGuard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	g := &recordingGuard{}
-	h := NewHandler(nil, nil, nil, reg(t)) // 服务 nil：403 路径不触达 handler 体
+	h := NewHandler(nil, nil, nil, reg(t), nil) // 服务/hasher nil：403 路径不触达 handler 体
 	router := gin.New()
 	h.RegisterRoutes(&router.RouterGroup, g)
 
@@ -60,7 +60,7 @@ func TestSystemHandlerRegisterRoutesWiresGuard(t *testing.T) {
 func TestFileHandlerRegisterRoutesWiresGuard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	g := &recordingGuard{}
-	h := NewFileHandler(nil, reg(t))
+	h := NewFileHandler(nil, reg(t), nil)
 	router := gin.New()
 	h.RegisterRoutes(&router.RouterGroup, g)
 

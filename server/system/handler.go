@@ -6,6 +6,7 @@
 // | @date      2026-06-08 00:30:00
 // | @updated   2026-06-08 02:40:00
 // | @updated   2026-06-08 13:00:00  T-003d：删本地"假"requirePerm，RegisterRoutes 注入 PermGuard 真 enforce
+// | @updated   2026-06-09 16:09:17  T-004d：对外 ID hashid 化 — path :id 解码 + 出参 encoder（注入 idcodec hasher）
 // +----------------------------------------------------------------------
 
 package system
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/idcodec"
 	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
@@ -31,11 +33,22 @@ type Handler struct {
 	configSvc *ConfigService
 	logSvc    *LogService
 	errs      *errcode.Registry
+	hasher    *idcodec.Hasher  // 注入；对外 ID hashid 编解码（nil 退化为裸 id）
+	enc       *ResponseEncoder // 始终非 nil；内部容忍 hasher==nil
 }
 
 // NewHandler 创建系统管理 handler。
-func NewHandler(dictSvc *DictService, configSvc *ConfigService, logSvc *LogService, errs *errcode.Registry) *Handler {
-	return &Handler{dictSvc: dictSvc, configSvc: configSvc, logSvc: logSvc, errs: errs}
+// T-004d：新增 hasher 注入参数（对外契约变更）——消费方装配须注入 idcodec.NewHasher 实例；
+// 传 nil 则出参/入参 id 退化为裸 uint64（与未启用 hashid 的部署对称）。
+func NewHandler(dictSvc *DictService, configSvc *ConfigService, logSvc *LogService, errs *errcode.Registry, hasher *idcodec.Hasher) *Handler {
+	return &Handler{
+		dictSvc:   dictSvc,
+		configSvc: configSvc,
+		logSvc:    logSvc,
+		errs:      errs,
+		hasher:    hasher,
+		enc:       NewResponseEncoder(hasher),
+	}
 }
 
 // RegisterRoutes 注册系统管理路由（每条经注入的 guard 真 enforce）。
@@ -69,7 +82,7 @@ func (h *Handler) ListDictTypes(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	list, total, _ := h.dictSvc.ListTypes(c.Request.Context(), page, ps)
-	response.OK(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
+	response.OK(c, h.enc.Page(list, total, page, ps))
 }
 
 func (h *Handler) CreateDictType(c *gin.Context) {
@@ -77,11 +90,11 @@ func (h *Handler) CreateDictType(c *gin.Context) {
 	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
 	dt, err := h.dictSvc.CreateType(c.Request.Context(), in)
 	if err != nil { response.ErrResp(c, err); return }
-	response.OK(c, dt)
+	response.OK(c, h.enc.Item(dt))
 }
 
 func (h *Handler) UpdateDictType(c *gin.Context) {
-	id, err := pid(c)
+	id, err := decodePathID(c, h.hasher, h.errs)
 	if err != nil { return }
 	var in CreateDictTypeInput
 	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
@@ -90,7 +103,7 @@ func (h *Handler) UpdateDictType(c *gin.Context) {
 }
 
 func (h *Handler) DeleteDictType(c *gin.Context) {
-	id, err := pid(c)
+	id, err := decodePathID(c, h.hasher, h.errs)
 	if err != nil { return }
 	if err := h.dictSvc.DeleteType(c.Request.Context(), id); err != nil { response.ErrResp(c, err); return }
 	response.OK(c, nil)
@@ -101,7 +114,7 @@ func (h *Handler) DeleteDictType(c *gin.Context) {
 func (h *Handler) ListDictData(c *gin.Context) {
 	dictType := c.Query("dict_type")
 	list, _ := h.dictSvc.ListDataByType(c.Request.Context(), dictType)
-	response.OK(c, list)
+	response.OK(c, h.enc.Items(list))
 }
 
 func (h *Handler) CreateDictData(c *gin.Context) {
@@ -109,11 +122,11 @@ func (h *Handler) CreateDictData(c *gin.Context) {
 	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
 	dd, err := h.dictSvc.CreateData(c.Request.Context(), in)
 	if err != nil { response.ErrResp(c, err); return }
-	response.OK(c, dd)
+	response.OK(c, h.enc.Item(dd))
 }
 
 func (h *Handler) UpdateDictData(c *gin.Context) {
-	id, err := pid(c)
+	id, err := decodePathID(c, h.hasher, h.errs)
 	if err != nil { return }
 	var in CreateDictDataInput
 	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
@@ -122,7 +135,7 @@ func (h *Handler) UpdateDictData(c *gin.Context) {
 }
 
 func (h *Handler) DeleteDictData(c *gin.Context) {
-	id, err := pid(c)
+	id, err := decodePathID(c, h.hasher, h.errs)
 	if err != nil { return }
 	if err := h.dictSvc.DeleteData(c.Request.Context(), id); err != nil { response.ErrResp(c, err); return }
 	response.OK(c, nil)
@@ -134,7 +147,7 @@ func (h *Handler) ListConfigs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	list, total, _ := h.configSvc.List(c.Request.Context(), page, ps)
-	response.OK(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
+	response.OK(c, h.enc.Page(list, total, page, ps))
 }
 
 func (h *Handler) CreateConfig(c *gin.Context) {
@@ -142,11 +155,11 @@ func (h *Handler) CreateConfig(c *gin.Context) {
 	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
 	cfg, err := h.configSvc.Create(c.Request.Context(), in)
 	if err != nil { response.ErrResp(c, err); return }
-	response.OK(c, cfg)
+	response.OK(c, h.enc.Item(cfg))
 }
 
 func (h *Handler) UpdateConfig(c *gin.Context) {
-	id, err := pid(c)
+	id, err := decodePathID(c, h.hasher, h.errs)
 	if err != nil { return }
 	var in CreateConfigInput
 	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
@@ -155,7 +168,7 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 }
 
 func (h *Handler) DeleteConfig(c *gin.Context) {
-	id, err := pid(c)
+	id, err := decodePathID(c, h.hasher, h.errs)
 	if err != nil { return }
 	if err := h.configSvc.Delete(c.Request.Context(), id); err != nil { response.ErrResp(c, err); return }
 	response.OK(c, nil)
@@ -168,7 +181,7 @@ func (h *Handler) ListOperLogs(c *gin.Context) {
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	operator := c.Query("operator")
 	list, total, _ := h.logSvc.ListOperLogs(c.Request.Context(), operator, nil, nil, page, ps)
-	response.OK(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
+	response.OK(c, h.enc.Page(list, total, page, ps))
 }
 
 func (h *Handler) CleanOperLogs(c *gin.Context) {
@@ -182,7 +195,7 @@ func (h *Handler) ListLoginLogs(c *gin.Context) {
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	username := c.Query("username")
 	list, total, _ := h.logSvc.ListLoginLogs(c.Request.Context(), username, page, ps)
-	response.OK(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
+	response.OK(c, h.enc.Page(list, total, page, ps))
 }
 
 func (h *Handler) CleanLoginLogs(c *gin.Context) {
@@ -191,10 +204,3 @@ func (h *Handler) CleanLoginLogs(c *gin.Context) {
 	response.OK(c, gin.H{"deleted": rows})
 }
 
-// --- 辅助 ---
-
-func pid(c *gin.Context) (uint64, error) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil { response.BadReq(c) }
-	return id, err
-}

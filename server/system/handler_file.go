@@ -6,6 +6,7 @@
 // | @date      2026-06-08 01:25:00
 // | @updated   2026-06-08 02:40:00
 // | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 PermGuard，路由走真 enforce
+// | @updated   2026-06-09 16:09:17  T-004d：对外 ID hashid 化 — :id 解码 + 出参 encoder（注入 idcodec hasher）
 // +----------------------------------------------------------------------
 
 package system
@@ -16,19 +17,23 @@ import (
 	"strconv"
 
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/idcodec"
 	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/gin-gonic/gin"
 )
 
 // FileHandler 文件管理 handler。
 type FileHandler struct {
-	svc  *FileService
-	errs *errcode.Registry
+	svc    *FileService
+	errs   *errcode.Registry
+	hasher *idcodec.Hasher
+	enc    *ResponseEncoder // 始终非 nil；内部容忍 hasher==nil
 }
 
 // NewFileHandler 创建文件 handler。
-func NewFileHandler(svc *FileService, errs *errcode.Registry) *FileHandler {
-	return &FileHandler{svc: svc, errs: errs}
+// T-004d：新增 hasher 注入参数（对外契约变更）——消费方装配须注入 idcodec hasher（nil 退化为裸 id）。
+func NewFileHandler(svc *FileService, errs *errcode.Registry, hasher *idcodec.Hasher) *FileHandler {
+	return &FileHandler{svc: svc, errs: errs, hasher: hasher, enc: NewResponseEncoder(hasher)}
 }
 
 // RegisterRoutes 注册文件管理路由（每条经注入的 guard 真 enforce）。
@@ -72,14 +77,13 @@ func (h *FileHandler) Upload(c *gin.Context) {
 		response.ErrResp(c, err)
 		return
 	}
-	response.OK(c, file)
+	response.OK(c, h.enc.Item(file))
 }
 
 // Download 鉴权流式下载。
 func (h *FileHandler) Download(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := decodePathID(c, h.hasher, h.errs)
 	if err != nil {
-		response.BadReq(c)
 		return
 	}
 
@@ -108,14 +112,13 @@ func (h *FileHandler) List(c *gin.Context) {
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	uploader := c.Query("uploader")
 	list, total, _ := h.svc.List(c.Request.Context(), uploader, page, ps)
-	response.OK(c, gin.H{"list": list, "total": total, "page": page, "page_size": ps})
+	response.OK(c, h.enc.Page(list, total, page, ps))
 }
 
 // Delete 删除文件。
 func (h *FileHandler) Delete(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := decodePathID(c, h.hasher, h.errs)
 	if err != nil {
-		response.BadReq(c)
 		return
 	}
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {

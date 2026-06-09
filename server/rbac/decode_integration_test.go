@@ -22,6 +22,7 @@ import (
 
 	"github.com/benxin_dev/benxinadminpro-server/auth"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/idcodec"
 	"github.com/gin-gonic/gin"
 )
 
@@ -43,7 +44,7 @@ func TestDecodeHashidInput_MySQL(t *testing.T) {
 	pwHasher, _ := auth.NewPasswordHasher(auth.Argon2idParams{
 		MemoryKiB: 1024, Iterations: 1, Parallelism: 1, SaltLen: 16, KeyLen: 32,
 	})
-	hashidHasher, _ := NewHasher(HashidConfig{Salt: "t-003e-int", MinLength: 8})
+	hashidHasher, _ := idcodec.NewHasher(idcodec.HashidConfig{Salt: "t-003e-int", MinLength: 8})
 	svc := NewUserService(db, pwHasher, reg)
 	h := NewUserHandler(svc, reg, hashidHasher)
 
@@ -108,7 +109,7 @@ func TestUpdateUserPostIDsThreeState_MySQL(t *testing.T) {
 	pwHasher, _ := auth.NewPasswordHasher(auth.Argon2idParams{
 		MemoryKiB: 1024, Iterations: 1, Parallelism: 1, SaltLen: 16, KeyLen: 32,
 	})
-	hh, _ := NewHasher(HashidConfig{Salt: "t-003e-3state", MinLength: 8})
+	hh, _ := idcodec.NewHasher(idcodec.HashidConfig{Salt: "t-003e-3state", MinLength: 8})
 	svc := NewUserService(db, pwHasher, reg)
 	h := NewUserHandler(svc, reg, hh)
 

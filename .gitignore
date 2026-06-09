@@ -14,6 +14,10 @@ server/config/config.yaml
 dist/
 build/
 server/bin/
+# demo 可执行产物（根锚定，仅匹配 server 下名为 demo 的二进制，不影响 server/examples/demo/ 源码目录）
+/server/demo
+# demo LocalDriver 本地存储根（运行时上传数据目录；NewLocalDriver 启动自动 MkdirAll 重建，无需 .gitkeep）
+/server/uploads/
 *.log
 # IDE / OS / 工具本地配置
 .DS_Store

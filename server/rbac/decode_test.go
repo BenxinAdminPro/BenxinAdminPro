@@ -16,12 +16,13 @@ import (
 	"testing"
 
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/idcodec"
 	"github.com/gin-gonic/gin"
 )
 
 func newTestHasher(t *testing.T) *Hasher {
 	t.Helper()
-	h, err := NewHasher(HashidConfig{Salt: "t-003e-salt", MinLength: 8})
+	h, err := idcodec.NewHasher(idcodec.HashidConfig{Salt: "t-003e-salt", MinLength: 8})
 	if err != nil {
 		t.Fatalf("NewHasher: %v", err)
 	}

@@ -1,11 +1,12 @@
 # +----------------------------------------------------------------------
 # | @project   本心通用管理后台 / BenxinAdminPro
-# | @mission   OpenAPI 3.0 规范 v0.9.0 — 全底座 API 规范
+# | @mission   OpenAPI 3.0 规范 v0.10.0 — 全底座 API 规范
 # | @author    仗键天涯(daxing)
 # | @email     3442535897@qq.com
 # | @date      2026-06-07 14:19:00
 # | @updated   2026-06-08 03:25:00
 # | @updated   2026-06-09 10:40:13  T-003e：对外 ID 入参收口 hashid，入出参对称
+# | @updated   2026-06-09 16:09:17  T-004d：system 对外 ID 全链路 hashid（出参+path :id），补全 dict/config item 路径
 # +----------------------------------------------------------------------
 
 openapi: "3.0.3"
@@ -27,8 +28,13 @@ info:
             入出参均为 hashid 字符串（path :id、body dept_id/post_ids/role_ids/menu_ids/parent_id、
             query dept_id），与出参对称；非法/伪造 hashid 一律 400，绝不回落、不暴露内部自增 id。
             PHP parity 约定：上述对外 ID 字段在请求与响应中均为 hashid 字符串，禁裸自增整数。
-            注：系统管理实体（字典/参数/文件）当前仍为整数主键，整体 hashid 化为独立切片，不在本片。
-  version: "0.9.0"
+    v0.10.0: system 实体对外 ID 全链路 hashid 化（T-004d）。字典/参数/文件/操作日志/登录日志的
+            出参 id 与 path :id（dict/config 的 PUT/DELETE、file download/delete）均为 hashid 字符串；
+            非法/伪造 :id → 400。补全此前缺失的 /sys/dict/types/{id}、/sys/dict/data/{id}、
+            /sys/configs/{id} 三组 item 路径定义。hasher 抽至中立包 idcodec 供 rbac/system 共用（解耦）。
+            PHP parity 扩展：system 对外 ID 亦为 hashid 字符串。注：system 响应 data 体未在 schema
+            强类型化（沿用 ApiResponse 泛型包络），id 为 hashid 字符串这一约定以本说明为准。
+  version: "0.10.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -1002,6 +1008,42 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ApiResponse" }
 
+  /sys/dict/types/{id}:
+    put:
+      tags: [System]
+      summary: 更新字典类型
+      operationId: updateDictType
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dict_type: { type: string }
+                name: { type: string }
+                status: { type: integer }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    delete:
+      tags: [System]
+      summary: 删除字典类型
+      operationId: deleteDictType
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
   /sys/dict/data:
     get:
       tags: [System]
@@ -1009,6 +1051,44 @@ paths:
       operationId: listDictData
       security: [{ BearerAuth: [] }]
       parameters: [{ name: dict_type, in: query, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/dict/data/{id}:
+    put:
+      tags: [System]
+      summary: 更新字典项
+      operationId: updateDictData
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dict_type: { type: string }
+                label: { type: string }
+                value: { type: string }
+                sort: { type: integer }
+                status: { type: integer }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    delete:
+      tags: [System]
+      summary: 删除字典项
+      operationId: deleteDictData
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }]
       responses:
         "200":
           description: 成功
@@ -1044,6 +1124,42 @@ paths:
                 config_key: { type: string }
                 config_value: { type: string }
                 name: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/configs/{id}:
+    put:
+      tags: [System]
+      summary: 更新参数
+      operationId: updateConfig
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config_key: { type: string }
+                config_value: { type: string }
+                name: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+    delete:
+      tags: [System]
+      summary: 删除参数
+      operationId: deleteConfig
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }]
       responses:
         "200":
           description: 成功

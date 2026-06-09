@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"syscall"
@@ -28,6 +29,7 @@ import (
 	"github.com/benxin_dev/benxinadminpro-server/crypto"
 	"github.com/benxin_dev/benxinadminpro-server/drivers/storage"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/idcodec"
 	"github.com/benxin_dev/benxinadminpro-server/rbac"
 	"github.com/benxin_dev/benxinadminpro-server/response"
 	"github.com/benxin_dev/benxinadminpro-server/system"
@@ -161,7 +163,7 @@ func buildApp(cfg demoConfig, db *gorm.DB, rdb *redis.Client) (*demoApp, error) 
 		return nil, fmt.Errorf("auth service: %w", err)
 	}
 
-	hashidHasher, err := rbac.NewHasher(rbac.HashidConfig{Salt: cfg.HashidSalt, MinLength: 8})
+	hashidHasher, err := idcodec.NewHasher(idcodec.HashidConfig{Salt: cfg.HashidSalt, MinLength: 8})
 	if err != nil {
 		return nil, fmt.Errorf("hashid: %w", err)
 	}
@@ -201,11 +203,14 @@ func buildApp(cfg demoConfig, db *gorm.DB, rdb *redis.Client) (*demoApp, error) 
 	redisSub.Subscribe(subCtx, configCenter.OnChange)
 
 	// ---- 装配自检 ----
+	// 用 isNilDep 侦测 typed-nil：map[string]any 持有 (*T)(nil) 时 v==nil 为 false，
+	// 直接 ==nil 抓不住类型化空指针（T-003e 评审暴露的盲区）；反射判定可真正侦测。
+	// 真正兜底仍是各构造器契约（如 NewHasher 永不返回 (nil,nil)）+ err fail-fast，自检为第二道。
 	for name, v := range map[string]any{
 		"hashid hasher": hashidHasher, "token service": tokenSvc,
 		"enforcer": enforcer, "config center": configCenter,
 	} {
-		if v == nil {
+		if isNilDep(v) {
 			subCancel()
 			return nil, fmt.Errorf("assembly self-check: %s is nil", name)
 		}
@@ -270,8 +275,8 @@ func buildApp(cfg demoConfig, db *gorm.DB, rdb *redis.Client) (*demoApp, error) 
 	// 仅需 JWT 认证、按设计无需 perm code（非裸奔——已在 protected 组受 JWTAuth 保护）。
 	rbac.NewAuthInfoHandler(menuSvc, userSvc, hashidHasher).RegisterRoutes(protected)
 
-	system.NewHandler(dictSvc, configSvc, logSvc, ecReg).RegisterRoutes(protected, authzEnforcer)
-	system.NewFileHandler(fileSvc, ecReg).RegisterRoutes(protected, authzEnforcer)
+	system.NewHandler(dictSvc, configSvc, logSvc, ecReg, hashidHasher).RegisterRoutes(protected, authzEnforcer)
+	system.NewFileHandler(fileSvc, ecReg, hashidHasher).RegisterRoutes(protected, authzEnforcer)
 
 	// C 端信封示例（可选）
 	if cryptoMW := setupCryptoMiddleware(aesKey, hmacKey, ecReg, rdb, cfg.RedisPrefix); cryptoMW != nil {
@@ -290,6 +295,21 @@ func buildApp(cfg demoConfig, db *gorm.DB, rdb *redis.Client) (*demoApp, error) 
 		configCenter: configCenter,
 		subCancel:    subCancel,
 	}, nil
+}
+
+// isNilDep 判定装配依赖是否为 nil，含 typed-nil（如 (*Hasher)(nil) 装进 any 后 ==nil 为 false）。
+// 装配自检用，避免类型化空指针漏检。
+func isNilDep(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
+		return rv.IsNil()
+	default:
+		return false
+	}
 }
 
 // ---------------------------------------------------------------------------

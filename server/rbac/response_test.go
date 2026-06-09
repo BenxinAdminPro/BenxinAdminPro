@@ -14,12 +14,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/benxin_dev/benxinadminpro-server/idcodec"
 	"github.com/gin-gonic/gin"
 )
 
 func testEncoder(t *testing.T) *ResponseEncoder {
 	t.Helper()
-	h, err := NewHasher(HashidConfig{Salt: "test-response-salt", MinLength: 8})
+	h, err := idcodec.NewHasher(idcodec.HashidConfig{Salt: "test-response-salt", MinLength: 8})
 	if err != nil {
 		t.Fatalf("NewHasher: %v", err)
 	}
