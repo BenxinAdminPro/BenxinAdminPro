@@ -6,6 +6,7 @@
 // | @date      2026-06-07 19:12:00
 // | @updated   2026-06-07 23:44:00
 // | @updated   2026-06-09 10:40:13  T-003e：对外 ID 字段降级 json:"-"（由 handler 解码注入，非裸绑定）
+// | @updated   2026-06-09 17:00:00  T-004e：唯一键冲突(1062)兜底转 ErrUsernameExists（软删/竞态防 500）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -16,6 +17,7 @@ import (
 	"fmt"
 
 	"github.com/benxin_dev/benxinadminpro-server/auth"
+	"github.com/benxin_dev/benxinadminpro-server/dberr"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
 	"gorm.io/gorm"
 )
@@ -110,6 +112,11 @@ func (s *UserService) Create(ctx context.Context, in CreateUserInput) (*SysUser,
 
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&user).Error; err != nil {
+			// username 唯一键冲突（软删记录占位/并发竞态，预检漏判）→ 友好码而非 500。
+			// 在 user 写语句处就地判定，避免与 sys_user_post 复合主键冲突混淆。
+			if dberr.IsDuplicate(err) {
+				return s.errs.ErrUsernameExists
+			}
 			return err
 		}
 		// 关联岗位
@@ -123,6 +130,11 @@ func (s *UserService) Create(ctx context.Context, in CreateUserInput) (*SysUser,
 		return nil
 	})
 	if err != nil {
+		// 友好业务码直接透传——response.HandleError 用类型断言 err.(Coder) 提码，
+		// 被 fmt.Errorf 包裹会断言失败落 500，故 coded 错误不可再包裹。
+		if _, ok := err.(interface{ GetCode() int }); ok {
+			return nil, err
+		}
 		return nil, fmt.Errorf("rbac: create user: %w", err)
 	}
 

@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:10:00
 // | @updated   2026-06-07 23:40:00
+// | @updated   2026-06-09 17:00:00  T-004e：唯一键冲突(1062)兜底转 ErrRoleCodeExists（软删/竞态防 500）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -14,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/benxin_dev/benxinadminpro-server/dberr"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
 	"gorm.io/gorm"
 )
@@ -73,6 +75,9 @@ func (s *RoleService) Create(ctx context.Context, in CreateRoleInput) (*SysRole,
 
 	role := SysRole{Code: in.Code, Name: in.Name, Sort: in.Sort, Status: in.Status, DataScope: ds, Remark: in.Remark}
 	if err := s.db.WithContext(ctx).Create(&role).Error; err != nil {
+		if dberr.IsDuplicate(err) {
+			return nil, s.errs.ErrRoleCodeExists
+		}
 		return nil, fmt.Errorf("rbac: create role: %w", err)
 	}
 	return &role, nil
@@ -118,6 +123,9 @@ func (s *RoleService) Update(ctx context.Context, id uint64, in UpdateRoleInput)
 		updates["data_scope"] = *in.DataScope
 	}
 	result := s.db.WithContext(ctx).Model(&SysRole{}).Where("id = ?", id).Updates(updates)
+	if dberr.IsDuplicate(result.Error) {
+		return s.errs.ErrRoleCodeExists
+	}
 	if result.RowsAffected == 0 {
 		return s.errs.ErrRoleCodeExists
 	}

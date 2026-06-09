@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 00:15:00
 // | @updated   2026-06-08 03:40:00
+// | @updated   2026-06-09 17:00:00  T-004e：唯一键冲突(1062)兜底转友好码（dict_type/config_key 防 500）
 // +----------------------------------------------------------------------
 
 package system
@@ -14,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/benxin_dev/benxinadminpro-server/dberr"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
 	"gorm.io/gorm"
 )
@@ -44,6 +46,9 @@ func (s *DictService) CreateType(ctx context.Context, in CreateDictTypeInput) (*
 	}
 	dt := SysDictType{DictType: in.DictType, Name: in.Name, Status: in.Status, Remark: in.Remark}
 	if err := s.db.WithContext(ctx).Create(&dt).Error; err != nil {
+		if dberr.IsDuplicate(err) {
+			return nil, s.errs.ErrDictTypeExists
+		}
 		return nil, fmt.Errorf("system: create dict type: %w", err)
 	}
 	return &dt, nil
@@ -63,6 +68,9 @@ func (s *DictService) UpdateType(ctx context.Context, id uint64, in CreateDictTy
 	result := s.db.WithContext(ctx).Model(&SysDictType{}).Where("id = ?", id).Updates(map[string]any{
 		"dict_type": in.DictType, "name": in.Name, "status": in.Status, "remark": in.Remark,
 	})
+	if dberr.IsDuplicate(result.Error) {
+		return s.errs.ErrDictTypeExists
+	}
 	if result.RowsAffected == 0 {
 		return s.errs.ErrDictTypeNotFound
 	}
@@ -137,6 +145,9 @@ func (s *ConfigService) Create(ctx context.Context, in CreateConfigInput) (*SysC
 	}
 	cfg := SysConfig{ConfigKey: in.ConfigKey, ConfigValue: in.ConfigValue, Name: in.Name, Remark: in.Remark}
 	if err := s.db.WithContext(ctx).Create(&cfg).Error; err != nil {
+		if dberr.IsDuplicate(err) {
+			return nil, s.errs.ErrConfigKeyExists
+		}
 		return nil, fmt.Errorf("system: create config: %w", err)
 	}
 	return &cfg, nil
@@ -184,6 +195,9 @@ func (s *ConfigService) Update(ctx context.Context, id uint64, in CreateConfigIn
 	result := s.db.WithContext(ctx).Model(&SysConfig{}).Where("id = ?", id).Updates(map[string]any{
 		"config_key": in.ConfigKey, "config_value": in.ConfigValue, "name": in.Name, "remark": in.Remark,
 	})
+	if dberr.IsDuplicate(result.Error) {
+		return s.errs.ErrConfigKeyExists
+	}
 	if result.RowsAffected == 0 {
 		return s.errs.ErrConfigNotFound
 	}

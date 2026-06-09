@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 19:18:00
+// | @updated   2026-06-09 17:00:00  T-004e：唯一键冲突(1062)兜底转 ErrPostCodeExists（软删/竞态防 500）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -13,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/benxin_dev/benxinadminpro-server/dberr"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
 	"gorm.io/gorm"
 )
@@ -74,6 +76,9 @@ func (s *PostService) Create(ctx context.Context, in CreatePostInput) (*SysPost,
 		Status: in.Status,
 	}
 	if err := s.db.WithContext(ctx).Create(&post).Error; err != nil {
+		if dberr.IsDuplicate(err) {
+			return nil, s.errs.ErrPostCodeExists
+		}
 		return nil, fmt.Errorf("rbac: create post: %w", err)
 	}
 	return &post, nil
@@ -129,6 +134,9 @@ func (s *PostService) Update(ctx context.Context, id uint64, in UpdatePostInput)
 		"sort":   in.Sort,
 		"status": in.Status,
 	})
+	if dberr.IsDuplicate(result.Error) {
+		return s.errs.ErrPostCodeExists
+	}
 	if result.RowsAffected == 0 {
 		return s.errs.ErrPostCodeExists // 岗位不存在
 	}
