@@ -6,6 +6,7 @@
 // | @date      2026-06-08 04:10:00
 // | @updated   2026-06-08 12:00:00  种子密码零明文：全部来自配置，缺失即 fail-fast
 // | @updated   2026-06-09 16:10:00  T-007c：补齐既有 C 页缺失的 F 权限码（对齐后端路由 RequirePerm）
+// | @updated   2026-06-10 12:02:21  T-007e：补操作/登录日志 C 菜单 + F 码（sys:operlog:* / sys:loginlog:*，对齐 handler.go RequirePerm）
 // +----------------------------------------------------------------------
 
 package main
@@ -144,6 +145,15 @@ func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoC
 	seedMenu(db, configPage.ID, "F", "参数编辑", "sys:config:update", "", "", "", 3)
 	seedMenu(db, configPage.ID, "F", "参数删除", "sys:config:delete", "", "", "", 4)
 	seedMenu(db, configPage.ID, "F", "敏感值查看", "sys:secret:view", "", "", "", 5)
+
+	// T-007e：日志页（码与 system/handler.go RegisterRoutes 的 RequirePerm 逐字一致）
+	operlogPage := seedMenu(db, sysDir.ID, "C", "操作日志", "", "/sys/operlog", "sys/operlog/index", "document", 7)
+	seedMenu(db, operlogPage.ID, "F", "操作日志查看", "sys:operlog:list", "", "", "", 1)
+	seedMenu(db, operlogPage.ID, "F", "操作日志清理", "sys:operlog:clean", "", "", "", 2)
+
+	loginlogPage := seedMenu(db, sysDir.ID, "C", "登录日志", "", "/sys/loginlog", "sys/loginlog/index", "monitor", 8)
+	seedMenu(db, loginlogPage.ID, "F", "登录日志查看", "sys:loginlog:list", "", "", "", 1)
+	seedMenu(db, loginlogPage.ID, "F", "登录日志清理", "sys:loginlog:clean", "", "", "", 2)
 
 	// ---- 6. 给编辑员角色分配部分权限 ----
 	var allMenuIDs []uint64
