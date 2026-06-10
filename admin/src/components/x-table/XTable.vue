@@ -6,6 +6,7 @@
   | @email     3442535897@qq.com
   | @date      2026-06-08 16:00:00
   | @updated   2026-06-09 14:30:00  T-007c：只读模式 + 工具栏/行操作插槽 + 列筛选/排序（服务端）
+  | @updated   2026-06-10 09:38:01  T-007d：增改删/拉取失败兜底 catch（请求层已 toast；失败保留弹窗、不冒未处理 rejection）
   +----------------------------------------------------------------------
   说明：通用底座组件，业务中立；对接 T-007a 请求层（统一包络/错误码/hashid 透传）。
        内置增删改按钮挂 v-permission（permPrefix:create/update/delete），仅 UX，后端才是边界。
@@ -71,6 +72,8 @@ async function fetchData(): Promise<void> {
     const res = await props.config.api.list(params)
     rows.value = res.list || []
     total.value = res.total || 0
+  } catch {
+    // 请求层已按错误码 toast；此处吞掉避免未处理 rejection，保留旧数据
   } finally {
     loading.value = false
   }
@@ -167,24 +170,35 @@ async function submitForm(): Promise<void> {
   const payload: Record<string, unknown> = {}
   for (const f of visibleFields.value) payload[f.prop] = form[f.prop]
 
-  if (dialogMode.value === 'create') {
-    await props.config.api.create?.(payload)
-    ElMessage.success(t('table.addOk'))
-  } else {
-    await props.config.api.update?.(editingId.value, payload)
-    ElMessage.success(t('table.saveOk'))
+  try {
+    if (dialogMode.value === 'create') {
+      await props.config.api.create?.(payload)
+    } else {
+      await props.config.api.update?.(editingId.value, payload)
+    }
+  } catch {
+    return // 请求层已 toast（如 409 唯一键冲突友好码）；保留弹窗供修正
   }
+  ElMessage.success(dialogMode.value === 'create' ? t('table.addOk') : t('table.saveOk'))
   dialogVisible.value = false
   fetchData()
 }
 
 async function onDelete(row: XRow): Promise<void> {
-  await ElMessageBox.confirm(t('table.delConfirm'), t('table.tip'), {
-    confirmButtonText: t('table.confirm'),
-    cancelButtonText: t('table.cancel'),
-    type: 'warning',
-  })
-  await props.config.api.remove?.(String(row[rowKey.value]))
+  try {
+    await ElMessageBox.confirm(t('table.delConfirm'), t('table.tip'), {
+      confirmButtonText: t('table.confirm'),
+      cancelButtonText: t('table.cancel'),
+      type: 'warning',
+    })
+  } catch {
+    return // 用户取消
+  }
+  try {
+    await props.config.api.remove?.(String(row[rowKey.value]))
+  } catch {
+    return // 请求层已 toast
+  }
   ElMessage.success(t('table.delOk'))
   // 删除后若本页空了，回退一页
   if (rows.value.length === 1 && page.value > 1) page.value--
