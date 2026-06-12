@@ -5,6 +5,7 @@
  * | @author    仗键天涯(daxing)
  * | @email     3442535897@qq.com
  * | @date      2026-06-08 14:00:00
+ * | @updated   2026-06-10 17:19:28  T-007f：blob 响应透传（鉴权下载流不走包络解包）+ blob 错误体解析友好 message
  * +----------------------------------------------------------------------
  *
  * 约定（与已验证后端契约对齐）：
@@ -80,6 +81,10 @@ async function redirectToLogin(): Promise<void> {
 // ---- 响应拦截：成功解包 ----
 service.interceptors.response.use(
   (response) => {
+    // 二进制流（responseType:'blob'，如鉴权下载）：响应体是文件流非 JSON 包络，原样透传
+    if (response.config.responseType === 'blob') {
+      return response.data
+    }
     const env = response.data as ApiEnvelope
     // 后端成功恒为 code==0；理论上不会出现 2xx+非0，稳妥起见兜底提示
     if (env && typeof env.code === 'number' && env.code !== 0) {
@@ -92,7 +97,18 @@ service.interceptors.response.use(
   async (error: AxiosError<ApiEnvelope>) => {
     const config = error.config as RetriableConfig | undefined
     const status = error.response?.status
-    const env = error.response?.data
+    // blob 请求失败时错误体也是 Blob（内容为 JSON 包络）→ 解析出友好 message 再分流
+    const raw: unknown = error.response?.data
+    let env: ApiEnvelope | undefined
+    if (raw instanceof Blob) {
+      try {
+        env = JSON.parse(await raw.text()) as ApiEnvelope
+      } catch {
+        // 非 JSON 错误体，保持 undefined 走默认提示
+      }
+    } else {
+      env = raw as ApiEnvelope | undefined
+    }
     const message = env?.message
 
     // 401：access 失效。非认证端点 + 未重试 + 有 refresh → 刷新重试一次

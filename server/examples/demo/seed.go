@@ -7,6 +7,7 @@
 // | @updated   2026-06-08 12:00:00  种子密码零明文：全部来自配置，缺失即 fail-fast
 // | @updated   2026-06-09 16:10:00  T-007c：补齐既有 C 页缺失的 F 权限码（对齐后端路由 RequirePerm）
 // | @updated   2026-06-10 12:02:21  T-007e：补操作/登录日志 C 菜单 + F 码（sys:operlog:* / sys:loginlog:*，对齐 handler.go RequirePerm）
+// | @updated   2026-06-10 17:19:28  T-007f：补文件管理 C 菜单 + F 码（sys:file:*，对齐 handler_file.go RequirePerm）
 // +----------------------------------------------------------------------
 
 package main
@@ -154,6 +155,13 @@ func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoC
 	loginlogPage := seedMenu(db, sysDir.ID, "C", "登录日志", "", "/sys/loginlog", "sys/loginlog/index", "monitor", 8)
 	seedMenu(db, loginlogPage.ID, "F", "登录日志查看", "sys:loginlog:list", "", "", "", 1)
 	seedMenu(db, loginlogPage.ID, "F", "登录日志清理", "sys:loginlog:clean", "", "", "", 2)
+
+	// T-007f：文件管理页（码与 system/handler_file.go RegisterRoutes 的 RequirePerm 逐字一致）
+	filePage := seedMenu(db, sysDir.ID, "C", "文件管理", "", "/sys/file", "sys/file/index", "folder", 9)
+	seedMenu(db, filePage.ID, "F", "文件列表", "sys:file:list", "", "", "", 1)
+	seedMenu(db, filePage.ID, "F", "文件上传", "sys:file:upload", "", "", "", 2)
+	seedMenu(db, filePage.ID, "F", "文件下载", "sys:file:download", "", "", "", 3)
+	seedMenu(db, filePage.ID, "F", "文件删除", "sys:file:delete", "", "", "", 4)
 
 	// ---- 6. 给编辑员角色分配部分权限 ----
 	var allMenuIDs []uint64
