@@ -8,6 +8,7 @@
 // | @updated   2026-06-09 16:10:00  T-007c：补齐既有 C 页缺失的 F 权限码（对齐后端路由 RequirePerm）
 // | @updated   2026-06-10 12:02:21  T-007e：补操作/登录日志 C 菜单 + F 码（sys:operlog:* / sys:loginlog:*，对齐 handler.go RequirePerm）
 // | @updated   2026-06-10 17:19:28  T-007f：补文件管理 C 菜单 + F 码（sys:file:*，对齐 handler_file.go RequirePerm）
+// | @updated   2026-06-12 14:24:57  T-007h：补岗位管理 C 菜单 + F 码（sys:post:*，对齐 rbac/handler_post.go RequirePerm，B 部分种子最后一块）
 // +----------------------------------------------------------------------
 
 package main
@@ -162,6 +163,13 @@ func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoC
 	seedMenu(db, filePage.ID, "F", "文件上传", "sys:file:upload", "", "", "", 2)
 	seedMenu(db, filePage.ID, "F", "文件下载", "sys:file:download", "", "", "", 3)
 	seedMenu(db, filePage.ID, "F", "文件删除", "sys:file:delete", "", "", "", 4)
+
+	// T-007h：岗位管理页（码与 rbac/handler_post.go RegisterRoutes 的 RequirePerm 逐字一致）
+	postPage := seedMenu(db, sysDir.ID, "C", "岗位管理", "", "/sys/post", "sys/post/index", "postcard", 10)
+	seedMenu(db, postPage.ID, "F", "岗位列表", "sys:post:list", "", "", "", 1)
+	seedMenu(db, postPage.ID, "F", "岗位新增", "sys:post:create", "", "", "", 2)
+	seedMenu(db, postPage.ID, "F", "岗位编辑", "sys:post:update", "", "", "", 3)
+	seedMenu(db, postPage.ID, "F", "岗位删除", "sys:post:delete", "", "", "", 4)
 
 	// ---- 6. 给编辑员角色分配部分权限 ----
 	var allMenuIDs []uint64

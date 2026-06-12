@@ -6,6 +6,7 @@
  * | @email     3442535897@qq.com
  * | @date      2026-06-08 16:00:00
  * | @updated   2026-06-09 14:30:00  T-007c：只读模式 + 行操作配置 + 列筛选/排序
+ * | @updated   2026-06-12 14:24:57  T-007h：表单字段插槽(type:'slot') + api.get 编辑回填详情 + delConfirm 文案覆写
  * +----------------------------------------------------------------------
  */
 import type { Component } from 'vue'
@@ -37,7 +38,11 @@ export interface XColumn {
 export interface XField {
   prop: string
   label: string
-  type?: 'input' | 'password' | 'textarea' | 'number' | 'select'
+  /**
+   * 'slot'：该字段控件由业务页经 `#field-<prop>` 作用域插槽提供（如树选择器/多选），
+   * 插槽收 { form, disabled }，控件 v-model 直接绑 form[prop]；提交仍随可见字段并入 payload。
+   */
+  type?: 'input' | 'password' | 'textarea' | 'number' | 'select' | 'slot'
   required?: boolean
   placeholder?: string
   options?: { label: string; value: string | number }[]
@@ -81,6 +86,12 @@ export interface XApi<T extends XRow = XRow> {
   create?: (data: Record<string, unknown>) => Promise<unknown>
   update?: (id: string, data: Record<string, unknown>) => Promise<unknown>
   remove?: (id: string) => Promise<unknown>
+  /**
+   * 编辑回填详情来源：提供则打开编辑弹窗前先拉详情、按详情填表（承载列表行没有的字段，
+   * 如关联 ids；调用方可在此做出参→表单的字段适配）。缺省 = 现状（用列表行数据填表）。
+   * 拉取失败不打开弹窗（请求层已 toast），避免用残缺数据回填后被全量覆写。
+   */
+  get?: (id: string) => Promise<XRow>
 }
 
 /** x-table 总配置。 */
@@ -98,6 +109,8 @@ export interface XTableConfig<T extends XRow = XRow> {
   readonly?: boolean
   /** 自定义行操作列表（与内置编辑/删除并存；只读模式下为唯一行操作来源）。 */
   actions?: XAction[]
+  /** 内置删除的二次确认文案覆写（按各资源后端真实删除行为措辞破坏性后果）；缺省 i18n 通用文案。 */
+  delConfirm?: string
   /** 操作列宽度（默认 160；行操作多时调大）。 */
   actionsWidth?: number | string
 }

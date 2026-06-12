@@ -7,6 +7,7 @@
   | @date      2026-06-08 16:00:00
   | @updated   2026-06-09 14:30:00  T-007c：只读模式 + 工具栏/行操作插槽 + 列筛选/排序（服务端）
   | @updated   2026-06-10 09:38:01  T-007d：增改删/拉取失败兜底 catch（请求层已 toast；失败保留弹窗、不冒未处理 rejection）
+  | @updated   2026-06-12 14:24:57  T-007h：表单字段插槽(#field-<prop>) + api.get 编辑回填详情 + delConfirm 覆写 + 数组默认值拷贝
   +----------------------------------------------------------------------
   说明：通用底座组件，业务中立；对接 T-007a 请求层（统一包络/错误码/hashid 透传）。
        内置增删改按钮挂 v-permission（permPrefix:create/update/delete），仅 UX，后端才是边界。
@@ -147,17 +148,32 @@ function fieldDisabled(f: XField): boolean {
   return dialogMode.value === 'edit' && f.editable === false
 }
 
+// 数组默认值/回填值须拷贝：default 是配置里的共享引用，直接赋给 form 会被
+// 多选控件 v-model 原地改写，污染下一次打开的默认值。
+function fillValue(v: unknown): unknown {
+  if (Array.isArray(v)) return [...v]
+  return v ?? ''
+}
+
 function openCreate(): void {
   dialogMode.value = 'create'
   editingId.value = ''
-  for (const f of fields.value) form[f.prop] = f.default ?? ''
+  for (const f of fields.value) form[f.prop] = fillValue(f.default)
   dialogVisible.value = true
 }
 
-function openEdit(row: XRow): void {
+async function openEdit(row: XRow): Promise<void> {
   dialogMode.value = 'edit'
   editingId.value = String(row[rowKey.value])
-  for (const f of fields.value) form[f.prop] = row[f.prop] ?? f.default ?? ''
+  let source: XRow = row
+  if (props.config.api.get) {
+    try {
+      source = await props.config.api.get(editingId.value)
+    } catch {
+      return // 请求层已 toast；详情拉不到不开弹窗，避免残缺回填被全量覆写
+    }
+  }
+  for (const f of fields.value) form[f.prop] = fillValue(source[f.prop] ?? row[f.prop] ?? f.default)
   dialogVisible.value = true
 }
 
@@ -186,7 +202,7 @@ async function submitForm(): Promise<void> {
 
 async function onDelete(row: XRow): Promise<void> {
   try {
-    await ElMessageBox.confirm(t('table.delConfirm'), t('table.tip'), {
+    await ElMessageBox.confirm(props.config.delConfirm || t('table.delConfirm'), t('table.tip'), {
       confirmButtonText: t('table.confirm'),
       cancelButtonText: t('table.cancel'),
       type: 'warning',
@@ -409,8 +425,15 @@ defineExpose({ refresh: fetchData })
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="480px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="92px">
         <el-form-item v-for="f in visibleFields" :key="f.prop" :label="f.label" :prop="f.prop">
+          <!-- 字段插槽：控件由业务页提供（如树选择器/多选），v-model 绑 form[f.prop] -->
+          <slot
+            v-if="f.type === 'slot'"
+            :name="`field-${f.prop}`"
+            :form="form"
+            :disabled="fieldDisabled(f)"
+          />
           <el-select
-            v-if="f.type === 'select'"
+            v-else-if="f.type === 'select'"
             v-model="form[f.prop]"
             :disabled="fieldDisabled(f)"
             style="width: 100%"
