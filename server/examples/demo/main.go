@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 04:02:00
 // | @updated   2026-06-08 12:00:00  抽出 buildApp 供 e2e 集成测试；密钥/装配错误改返回 error
+// | @updated   2026-06-13 15:30:00  T-005b-1：menuSvc 注入 policySync（菜单 CUD 联动 policy 重载）
 // +----------------------------------------------------------------------
 
 package main
@@ -269,6 +270,7 @@ func buildApp(cfg demoConfig, db *gorm.DB, rdb *redis.Client) (*demoApp, error) 
 	rbac.NewRoleHandler(roleSvc, ecReg, hashidHasher).RegisterRoutes(protected, authzEnforcer)
 
 	menuSvc := rbac.NewMenuService(db, ecReg)
+	menuSvc.SetPolicySync(policySync) // T-005b-1：菜单 CUD 后联动 Casbin policy 重载（改/删 F 节点权限即时收回）
 	rbac.NewMenuHandler(menuSvc, ecReg, hashidHasher).RegisterRoutes(protected, authzEnforcer)
 
 	// auth_info（/sys/auth/menus、/sys/auth/perms）：返回当前用户自身菜单/权限，
