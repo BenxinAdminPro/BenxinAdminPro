@@ -6,6 +6,7 @@
   | @email     3442535897@qq.com
   | @date      2026-06-08 16:00:00
   | @updated   2026-06-12 14:24:57  T-007h：表单嵌入部门树/岗位选择器 + api.get 编辑回填（T-003e hashid 入参收口的消费验证）
+  | @updated   2026-06-14 14:30:00  T-008a：+重置密码行操作 + status 假能力修复（编辑表单去 status，改行操作切换接 PUT :id/status）
   +----------------------------------------------------------------------
   回填语义（以后端源码为准）：
    - 详情 GET /sys/users/:id 出参 dept_id 为 hashid|null、posts 仅非空时出现（response.go User）；
@@ -13,19 +14,109 @@
    - 提交（updateUserReq）dept_id ''=清空部门；post_ids 数组=全量覆写岗位（[]=清空）。
      编辑必先经 api.get 回填再提交，避免无回填的全量覆写静默清空 dept/posts
      （改造前旧表单不带 dept_id 字段，每次编辑都会把部门清成 NULL——本片连带修复）。
+  T-008a status 假能力修复：updateUserReq 后端无 Status 字段（handler_user.go:312），编辑弹窗里改
+   status 提交被静默吞（T-007h §8-3 假能力）。本片把 status 字段标 createOnly（仅新增可设初始态、
+   编辑弹窗不再显示 → 假能力根除），状态变更改走「行操作切换」调独立端点 PUT /sys/users/:id/status。
+  T-008a 状态开关落点说明：§2 原意「列内 el-switch」需 x-table 单元格插槽（改 x-table 核心，§2 禁止）；
+   且覆写 #row-actions 插槽会丢内置编辑/删除（插槽仅暴露 row）。故按 §2 显式回退「走行操作插槽」，
+   用 config.actions 行操作按钮（动态二次确认）实现状态切换，与内置编辑/删除并列、不改 x-table 核心。
 -->
 <script setup lang="ts">
+import { ref, reactive } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Key, Switch } from '@element-plus/icons-vue'
 import XTable from '@/components/x-table/XTable.vue'
-import type { XTableConfig } from '@/components/x-table/types'
+import type { XTableConfig, XRow } from '@/components/x-table/types'
 import DeptTreeSelect from '@/components/selectors/DeptTreeSelect.vue'
 import PostSelect from '@/components/selectors/PostSelect.vue'
-import { listUsers, createUser, updateUser, removeUser, getUser } from '@/api/user'
+import {
+  listUsers, createUser, updateUser, removeUser, getUser,
+  resetUserPassword, setUserStatus,
+} from '@/api/user'
 
 const statusText = (v: unknown) => (Number(v) === 0 ? '正常' : '停用')
 const dateText = (v: unknown) => (typeof v === 'string' ? v.slice(0, 19).replace('T', ' ') : '')
 
+// ---- 重置密码弹窗（页级控件，非 x-table 内置）----
+const pwdVisible = ref(false)
+const pwdTarget = reactive<{ id: string; username: string }>({ id: '', username: '' })
+const pwdForm = reactive<{ password: string; confirm: string }>({ password: '', confirm: '' })
+const pwdSubmitting = ref(false)
+
+function openResetPwd(row: XRow): void {
+  pwdTarget.id = String(row.id)
+  pwdTarget.username = String(row.username ?? '')
+  pwdForm.password = ''
+  pwdForm.confirm = ''
+  pwdVisible.value = true
+}
+
+async function submitResetPwd(): Promise<void> {
+  // 前端预校验仅 UX：后端入参仅 binding:"required"（非空），无长度/强度校验，不伪造规则。
+  if (!pwdForm.password) {
+    ElMessage.warning('请输入新密码')
+    return
+  }
+  if (pwdForm.password !== pwdForm.confirm) {
+    ElMessage.warning('两次输入的密码不一致')
+    return
+  }
+  pwdSubmitting.value = true
+  try {
+    await resetUserPassword(pwdTarget.id, pwdForm.password)
+    ElMessage.success('密码已重置')
+    pwdVisible.value = false
+    // 不回显/不缓存明文：关闭即清空（destroy-on-close 亦兜底）
+    pwdForm.password = ''
+    pwdForm.confirm = ''
+  } catch {
+    // 请求层已按错误码 toast；此处保留弹窗供修正，不冒未处理 rejection
+  } finally {
+    pwdSubmitting.value = false
+  }
+}
+
+// ---- 状态切换（行操作，调独立端点 PUT :id/status）----
+async function toggleStatus(row: XRow): Promise<void> {
+  const target = Number(row.status) === 0 ? 1 : 0
+  const word = target === 0 ? '启用' : '停用'
+  try {
+    await ElMessageBox.confirm(`确认${word}用户「${row.username}」？`, '状态变更', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return // 用户取消
+  }
+  try {
+    await setUserStatus(String(row.id), target)
+    ElMessage.success(`已${word}`)
+  } catch {
+    // 请求层已 toast；吞掉避免未处理 rejection（refresh 由 action.refresh 触发，失败态不写脏行）
+  }
+}
+
 const config: XTableConfig = {
   permPrefix: 'sys:user',
+  actionsWidth: 260, // 容纳 编辑/删除/重置密码/状态切换
+  actions: [
+    {
+      label: '重置密码',
+      perm: 'sys:user:password',
+      type: 'warning',
+      icon: Key,
+      handler: (row: XRow) => openResetPwd(row),
+    },
+    {
+      label: '停用/启用',
+      perm: 'sys:user:status',
+      type: 'info',
+      icon: Switch,
+      handler: (row: XRow) => toggleStatus(row),
+      refresh: true, // 切换后刷新列表，状态列文案随之更新
+    },
+  ],
   api: {
     list: listUsers,
     create: createUser,
@@ -69,10 +160,14 @@ const config: XTableConfig = {
     { prop: 'email', label: '邮箱' },
     { prop: 'mobile', label: '手机号' },
     {
+      // T-008a：status 标 createOnly —— 仅新增可设初始状态（CreateUserInput 支持 Status）；
+      // 编辑弹窗不再显示 status（updateUserReq 无 Status 字段，编辑改它会被静默吞=假能力）。
+      // 状态变更改走行操作「停用/启用」调独立端点 PUT /sys/users/:id/status。
       prop: 'status',
       label: '状态',
       type: 'select',
       default: 0,
+      createOnly: true,
       options: [
         { label: '正常', value: 0 },
         { label: '停用', value: 1 },
@@ -93,5 +188,38 @@ const config: XTableConfig = {
         <PostSelect v-model="form.post_ids as string[]" :disabled="disabled" />
       </template>
     </XTable>
+
+    <!-- 重置密码弹窗（页级控件；新密码不回显既有、不缓存、关闭即清空） -->
+    <el-dialog
+      v-model="pwdVisible"
+      :title="`重置密码 - ${pwdTarget.username}`"
+      width="420px"
+      destroy-on-close
+    >
+      <el-form label-width="90px" @submit.prevent>
+        <el-form-item label="新密码" required>
+          <el-input
+            v-model="pwdForm.password"
+            type="password"
+            show-password
+            autocomplete="new-password"
+            placeholder="请输入新密码"
+          />
+        </el-form-item>
+        <el-form-item label="确认密码" required>
+          <el-input
+            v-model="pwdForm.confirm"
+            type="password"
+            show-password
+            autocomplete="new-password"
+            placeholder="请再次输入新密码"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="pwdVisible = false">取消</el-button>
+        <el-button type="primary" :loading="pwdSubmitting" @click="submitResetPwd">确定</el-button>
+      </template>
+    </el-dialog>
   </el-card>
 </template>

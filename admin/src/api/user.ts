@@ -6,6 +6,7 @@
  * | @email     3442535897@qq.com
  * | @date      2026-06-08 16:00:00
  * | @updated   2026-06-12 14:24:57  T-007h：+getUser 详情（dept_id/posts 编辑回填来源）
+ * | @updated   2026-06-14 14:30:00  T-008a：+resetUserPassword（PUT :id/password）+setUserStatus（PUT :id/status）
  * +----------------------------------------------------------------------
  */
 import { http } from '@/request'
@@ -53,4 +54,21 @@ export function updateUser(id: string, data: Record<string, unknown>) {
 
 export function removeUser(id: string) {
   return http.delete(`/sys/users/${id}`)
+}
+
+/**
+ * 重置用户密码（PUT /sys/users/:id/password，权限码 sys:user:password）。
+ * 后端入参仅 { password }（binding:"required" 非空，无长度/强度校验）；
+ * 前端预校验（非空 + 二次确认一致）仅 UX、不伪造后端不存在的强度规则。
+ */
+export function resetUserPassword(id: string, password: string) {
+  return http.put(`/sys/users/${id}/password`, { password })
+}
+
+/**
+ * 设置用户状态（PUT /sys/users/:id/status，权限码 sys:user:status）。
+ * status 语义以后端为准：0=正常（启用），非0=停用（auth 登录 Status!=0 → 账号停用拒登）。
+ */
+export function setUserStatus(id: string, status: number) {
+  return http.put(`/sys/users/${id}/status`, { status })
 }
