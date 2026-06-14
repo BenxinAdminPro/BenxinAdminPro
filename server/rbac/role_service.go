@@ -6,6 +6,7 @@
 // | @date      2026-06-07 21:10:00
 // | @updated   2026-06-07 23:40:00
 // | @updated   2026-06-09 17:00:00  T-004e：唯一键冲突(1062)兜底转 ErrRoleCodeExists（软删/竞态防 500）
+// | @updated   2026-06-14 18:10:00  T-008c：Get 搭车预载全量 menu_ids（授权树弹窗回填来源）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -89,7 +90,14 @@ func (s *RoleService) Get(ctx context.Context, id uint64) (*SysRole, error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, s.errs.ErrRoleCodeExists
 	}
-	return &role, err
+	if err != nil {
+		return nil, err
+	}
+	// T-008c：回填全量已授 menu_ids（M/C/F 三层，不过滤类型）供「分配菜单」授权树 setCheckedKeys。
+	// AssignMenus 为全量覆写——回填必须返全集，否则漏回填的节点会在覆写提交时被静默删除（§6）。
+	// 仅详情 Get 预载、List 不载（omitempty 不污染列表，同 T-008b SysUser.Roles 范式）。
+	s.db.WithContext(ctx).Model(&SysRoleMenu{}).Where("role_id = ?", id).Pluck("menu_id", &role.MenuIDs)
+	return &role, nil
 }
 
 func (s *RoleService) List(ctx context.Context, q RoleListQuery) (*PageResult, error) {

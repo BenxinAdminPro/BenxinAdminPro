@@ -6,6 +6,7 @@
 // | @date      2026-06-07 22:30:00
 // | @updated   2026-06-07 23:42:00
 // | @updated   2026-06-14 15:30:00  T-008b：User 出参加 roles（详情预载时输出，列表 omitempty 不污染）
+// | @updated   2026-06-14 18:10:00  T-008c：Role 出参加 menu_ids（详情预载 hashid 数组，授权树回填来源）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -133,7 +134,7 @@ func (e *ResponseEncoder) PostList(result *PageResult) gin.H {
 
 // Role 编码角色响应。
 func (e *ResponseEncoder) Role(r *SysRole) gin.H {
-	return gin.H{
+	resp := gin.H{
 		"id":         e.H.Encode(r.ID),
 		"code":       r.Code,
 		"name":       r.Name,
@@ -144,6 +145,16 @@ func (e *ResponseEncoder) Role(r *SysRole) gin.H {
 		"created_at": r.CreatedAt,
 		"updated_at": r.UpdatedAt,
 	}
+	// T-008c：详情 Get 预载的已授菜单 → hashid 数组（守 T-004d，不裸 uint64）。
+	// List 未载 → 不输出，列表零污染（同 User.roles 范式）。
+	if len(r.MenuIDs) > 0 {
+		ids := make([]string, 0, len(r.MenuIDs))
+		for _, mid := range r.MenuIDs {
+			ids = append(ids, e.H.Encode(mid))
+		}
+		resp["menu_ids"] = ids
+	}
+	return resp
 }
 
 // RoleList 编码角色列表。

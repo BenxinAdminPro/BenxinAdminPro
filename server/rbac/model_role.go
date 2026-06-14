@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:02:00
 // | @updated   2026-06-07 23:32:00
+// | @updated   2026-06-14 18:10:00  T-008c：SysRole 加非持久化 MenuIDs（详情 Get 预载，授权树弹窗回填来源）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -34,6 +35,10 @@ type SysRole struct {
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	// T-008c：非持久化已授菜单 ID（全量 M/C/F 三层）。仅详情 Get 预载，供「分配菜单」授权树弹窗回填；
+	// List 不载故不污染列表出参（omitempty）。enc.Role 输出时编码为 hashid 数组（同 SysUser.Roles 范式）。
+	MenuIDs []uint64 `gorm:"-" json:"menu_ids,omitempty"`
 }
 
 // SysMenu 菜单/权限点。表名：{prefix}sys_menu。

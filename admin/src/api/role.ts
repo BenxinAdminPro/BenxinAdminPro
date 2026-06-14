@@ -6,6 +6,7 @@
  * | @email     3442535897@qq.com
  * | @date      2026-06-08 16:00:00
  * | @updated   2026-06-14 15:55:00  T-008b：+listAllRoles（分配角色弹窗全量选项，循环翻页取齐）
+ * | @updated   2026-06-14 18:25:00  T-008c：+getRole（详情预载 menu_ids 授权树回填）+assignRoleMenus（PUT :id/menus 全量覆写）
  * +----------------------------------------------------------------------
  */
 import { http } from '@/request'
@@ -24,8 +25,27 @@ export interface RoleRow extends Record<string, unknown> {
   updated_at: string
 }
 
+/** 角色详情（GET /sys/roles/:id）。menu_ids 仅详情预载：当前全量已授菜单 hashid（含 M/C/F 三层）。 */
+export interface RoleDetail extends RoleRow {
+  menu_ids?: string[]
+}
+
 export function listRoles(params: Record<string, unknown>) {
   return http.get<PageResult<RoleRow>>('/sys/roles', { params })
+}
+
+/** 角色详情（授权树弹窗回填来源）：menu_ids = 当前全量已授菜单 hashid（含 M/C/F），hashid 透传不解码。 */
+export function getRole(id: string) {
+  return http.get<RoleDetail>(`/sys/roles/${id}`)
+}
+
+/**
+ * 分配菜单/授权（PUT /sys/roles/:id/menus，权限码 sys:role:assign）。
+ * 入参 menu_ids 为 hashid 数组，**全量覆写**该角色授权（service 先删后建 + 联动 Casbin p 规则）。
+ * 故提交前须以「当前已授全量」（详情 menu_ids 回填）为基准改动，避免覆写丢权限。
+ */
+export function assignRoleMenus(id: string, menuIds: string[]) {
+  return http.put(`/sys/roles/${id}/menus`, { menu_ids: menuIds })
 }
 
 export function createRole(data: Record<string, unknown>) {

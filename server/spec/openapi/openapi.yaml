@@ -41,7 +41,7 @@ info:
     v0.12.0: 用户出参加 roles（T-008b）。GET /sys/users/:id（预载）与 GET /sys/users（列表批量回填、
             固定查询非 N+1）均返已授角色（id hashid + code/name）；无角色 omitempty 不输出。
             供「分配角色」弹窗回填 + 列表角色列展示。写路径 PUT /sys/users/:id/roles（hashid 全量覆写）不变。
-  version: "0.12.0"
+  version: "0.13.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -243,6 +243,10 @@ components:
           description: "数据权限 1=全部 2=仅本人 3=本部门"
           default: 2
         remark: { type: string }
+        menu_ids:
+          type: array
+          items: { type: string }
+          description: "已授菜单对外 ID(hashid) 全量集合，含 M/C/F 三层。仅角色详情 GET /sys/roles/{id} 预载返回，列表不含。授权树弹窗回填来源（全量覆写须返全集）。"
 
     SysMenu:
       type: object
