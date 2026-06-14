@@ -7,6 +7,8 @@
 // | @updated   2026-06-07 23:44:00
 // | @updated   2026-06-09 10:40:13  T-003e：对外 ID 字段降级 json:"-"（由 handler 解码注入，非裸绑定）
 // | @updated   2026-06-09 17:00:00  T-004e：唯一键冲突(1062)兜底转 ErrUsernameExists（软删/竞态防 500）
+// | @updated   2026-06-14 15:30:00  T-008b：Get 预载已授角色（分配角色弹窗回填全量 role_ids 来源）
+// | @updated   2026-06-14 16:40:00  T-008b 增量：List 批量回填 Roles（列表角色列，固定 2 查询非 N+1）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -160,6 +162,14 @@ func (s *UserService) Get(ctx context.Context, id uint64) (*SysUser, error) {
 		s.db.WithContext(ctx).Where("id IN ?", postIDs).Find(&user.Posts)
 	}
 
+	// T-008b：手动加载已授角色（详情专属，供「分配角色」弹窗回填全量 role_ids；
+	// 仅 Get 预载、List 不载，避免列表 N+1 与出参污染）。SysRole 无敏感字段。
+	var roleIDs []uint64
+	s.db.WithContext(ctx).Model(&SysUserRole{}).Where("user_id = ?", id).Pluck("role_id", &roleIDs)
+	if len(roleIDs) > 0 {
+		s.db.WithContext(ctx).Where("id IN ?", roleIDs).Find(&user.Roles)
+	}
+
 	user.PasswordHash = ""
 	return &user, nil
 }
@@ -198,7 +208,62 @@ func (s *UserService) List(ctx context.Context, q UserListQuery) (*PageResult, e
 		return nil, fmt.Errorf("rbac: list users: %w", err)
 	}
 
+	// T-008b 增量：批量回填本页用户的已授角色（列表「角色」列展示来源）。
+	// 固定 2 次额外查询（junction IN + role IN），与本页行数 N 解耦，不退化成 N+1。
+	s.fillUserRoles(ctx, users)
+
 	return &PageResult{List: users, Total: total, Page: q.Page, PageSize: q.PageSize}, nil
+}
+
+// fillUserRoles 批量回填本页用户的 Roles（一对多分组）。
+// 查询③ junction（SysUserRole 无软删，model 查询安全）：一次 WHERE user_id IN 取全页关联；
+// 查询④ 角色（SysRole 有软删，model 查询让 deleted_at IS NULL scope 自动剔除软删角色，
+//
+//	故意不用原生 .Table()——那会绕过软删 scope，账本第 7 例潜伏点）。
+//
+// 内存按 user 分组回填。查询次数固定（与 N 无关），password_hash 不涉（仅查 role）。
+func (s *UserService) fillUserRoles(ctx context.Context, users []SysUser) {
+	if len(users) == 0 {
+		return
+	}
+	userIDs := make([]uint64, 0, len(users))
+	for i := range users {
+		userIDs = append(userIDs, users[i].ID)
+	}
+
+	// 查询③：全页 user_role 关联
+	var urs []SysUserRole
+	s.db.WithContext(ctx).Model(&SysUserRole{}).Where("user_id IN ?", userIDs).Find(&urs)
+	if len(urs) == 0 {
+		return
+	}
+	userRoleIDs := make(map[uint64][]uint64, len(users)) // userID → []roleID
+	roleIDSet := make(map[uint64]struct{})
+	for _, ur := range urs {
+		userRoleIDs[ur.UserID] = append(userRoleIDs[ur.UserID], ur.RoleID)
+		roleIDSet[ur.RoleID] = struct{}{}
+	}
+	distinctRoleIDs := make([]uint64, 0, len(roleIDSet))
+	for rid := range roleIDSet {
+		distinctRoleIDs = append(distinctRoleIDs, rid)
+	}
+
+	// 查询④：去重后的角色（model 查询 → 软删角色自动剔除）
+	var roles []SysRole
+	s.db.WithContext(ctx).Where("id IN ?", distinctRoleIDs).Find(&roles)
+	roleByID := make(map[uint64]SysRole, len(roles))
+	for i := range roles {
+		roleByID[roles[i].ID] = roles[i]
+	}
+
+	// 内存分组回填（软删角色不在 roleByID → 自动跳过）
+	for i := range users {
+		for _, rid := range userRoleIDs[users[i].ID] {
+			if r, ok := roleByID[rid]; ok {
+				users[i].Roles = append(users[i].Roles, r)
+			}
+		}
+	}
 }
 
 // Update 更新用户（不含密码）。

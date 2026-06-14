@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 22:30:00
 // | @updated   2026-06-07 23:42:00
+// | @updated   2026-06-14 15:30:00  T-008b：User 出参加 roles（详情预载时输出，列表 omitempty 不污染）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -47,6 +48,14 @@ func (e *ResponseEncoder) User(u *SysUser) gin.H {
 			posts = append(posts, e.Post(&u.Posts[i]))
 		}
 		resp["posts"] = posts
+	}
+	// T-008b：已授角色（仅详情 Get 预载时出现；List 未载 → omitempty 不输出，列表零污染）。
+	if len(u.Roles) > 0 {
+		var roles []gin.H
+		for i := range u.Roles {
+			roles = append(roles, e.Role(&u.Roles[i]))
+		}
+		resp["roles"] = roles
 	}
 	return resp
 }

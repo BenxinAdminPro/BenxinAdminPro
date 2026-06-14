@@ -7,6 +7,7 @@
   | @date      2026-06-08 16:00:00
   | @updated   2026-06-12 14:24:57  T-007h：表单嵌入部门树/岗位选择器 + api.get 编辑回填（T-003e hashid 入参收口的消费验证）
   | @updated   2026-06-14 14:30:00  T-008a：+重置密码行操作 + status 假能力修复（编辑表单去 status，改行操作切换接 PUT :id/status）
+  | @updated   2026-06-14 16:45:00  T-008b：+分配角色行操作（多选弹窗回填+全量覆写）+ 列表「角色」列（后端批量回填）
   +----------------------------------------------------------------------
   回填语义（以后端源码为准）：
    - 详情 GET /sys/users/:id 出参 dept_id 为 hashid|null、posts 仅非空时出现（response.go User）；
@@ -24,18 +25,60 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Key, Switch } from '@element-plus/icons-vue'
+import { Key, Switch, UserFilled } from '@element-plus/icons-vue'
 import XTable from '@/components/x-table/XTable.vue'
 import type { XTableConfig, XRow } from '@/components/x-table/types'
 import DeptTreeSelect from '@/components/selectors/DeptTreeSelect.vue'
 import PostSelect from '@/components/selectors/PostSelect.vue'
 import {
   listUsers, createUser, updateUser, removeUser, getUser,
-  resetUserPassword, setUserStatus,
+  resetUserPassword, setUserStatus, assignUserRoles,
 } from '@/api/user'
+import { listAllRoles, type RoleRow } from '@/api/role'
 
 const statusText = (v: unknown) => (Number(v) === 0 ? '正常' : '停用')
 const dateText = (v: unknown) => (typeof v === 'string' ? v.slice(0, 19).replace('T', ' ') : '')
+// 角色列：roles 数组 → 角色名顿号分隔；无角色显「—」。
+const rolesText = (v: unknown) => {
+  const rs = Array.isArray(v) ? (v as RoleRow[]) : []
+  return rs.length ? rs.map((r) => r.name).join('、') : '—'
+}
+
+// ---- 分配角色弹窗（页级控件；全量覆写，回填以当前已授为基准）----
+const roleVisible = ref(false)
+const roleTarget = reactive<{ id: string; username: string }>({ id: '', username: '' })
+const roleOptions = ref<RoleRow[]>([])
+const roleSelected = ref<string[]>([]) // 角色 hashid 数组
+const roleSubmitting = ref(false)
+
+async function openAssignRoles(row: XRow): Promise<void> {
+  const id = String(row.id)
+  try {
+    // 回填以「当前已授全量」为基准（全量覆写下回填是正确性前提）；并行取全量角色选项。
+    const [detail, all] = await Promise.all([getUser(id), listAllRoles()])
+    roleOptions.value = all
+    roleSelected.value = (detail.roles ?? []).map((r) => r.id)
+  } catch {
+    // 回填/选项拉取失败 → 不开弹窗（避免残缺回填被全量覆写静默清空，同 T-007h 防误清）
+    return
+  }
+  roleTarget.id = id
+  roleTarget.username = String(row.username ?? '')
+  roleVisible.value = true
+}
+
+async function submitAssignRoles(): Promise<void> {
+  roleSubmitting.value = true
+  try {
+    await assignUserRoles(roleTarget.id, roleSelected.value)
+    ElMessage.success('角色已分配')
+    roleVisible.value = false
+  } catch {
+    // 请求层已 toast；保留弹窗供修正，不冒未处理 rejection
+  } finally {
+    roleSubmitting.value = false
+  }
+}
 
 // ---- 重置密码弹窗（页级控件，非 x-table 内置）----
 const pwdVisible = ref(false)
@@ -99,8 +142,15 @@ async function toggleStatus(row: XRow): Promise<void> {
 
 const config: XTableConfig = {
   permPrefix: 'sys:user',
-  actionsWidth: 260, // 容纳 编辑/删除/重置密码/状态切换
+  actionsWidth: 330, // 容纳 编辑/删除/分配角色/重置密码/状态切换
   actions: [
+    {
+      label: '分配角色',
+      perm: 'sys:user:assign',
+      type: 'primary',
+      icon: UserFilled,
+      handler: (row: XRow) => openAssignRoles(row),
+    },
     {
       label: '重置密码',
       perm: 'sys:user:password',
@@ -148,6 +198,9 @@ const config: XTableConfig = {
     { prop: 'username', label: '用户名', minWidth: 120 },
     { prop: 'nickname', label: '昵称', minWidth: 120 },
     { prop: 'mobile', label: '手机号', minWidth: 120 },
+    // T-008b：角色列（后端 List 批量回填 roles）。多个顿号分隔、无角色显「—」。
+    // 文本展示（非 el-tag）：el-tag 需 x-table 单元格插槽=改核心，§2 禁（同 status 落点）。
+    { prop: 'roles', label: '角色', minWidth: 160, formatter: (_r, v) => rolesText(v) },
     { prop: 'status', label: '状态', width: 90, formatter: (_r, v) => statusText(v) },
     { prop: 'created_at', label: '创建时间', minWidth: 160, formatter: (_r, v) => dateText(v) },
   ],
@@ -221,5 +274,43 @@ const config: XTableConfig = {
         <el-button type="primary" :loading="pwdSubmitting" @click="submitResetPwd">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 分配角色弹窗（多选；回填当前已授 → 改选 → 全量覆写 PUT :id/roles） -->
+    <el-dialog
+      v-model="roleVisible"
+      :title="`分配角色 - ${roleTarget.username}`"
+      width="460px"
+      destroy-on-close
+    >
+      <el-select
+        v-model="roleSelected"
+        multiple
+        clearable
+        collapse-tags
+        collapse-tags-tooltip
+        placeholder="选择角色（留空=移除全部角色）"
+        style="width: 100%"
+      >
+        <el-option
+          v-for="r in roleOptions"
+          :key="r.id"
+          :label="`${r.name}（${r.code}）`"
+          :value="r.id"
+        />
+      </el-select>
+      <div class="role-assign-hint">提交后将以当前选择全量覆写该用户角色（含 Casbin 权限联动）。</div>
+      <template #footer>
+        <el-button @click="roleVisible = false">取消</el-button>
+        <el-button type="primary" :loading="roleSubmitting" @click="submitAssignRoles">确定</el-button>
+      </template>
+    </el-dialog>
   </el-card>
 </template>
+
+<style scoped>
+.role-assign-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+</style>

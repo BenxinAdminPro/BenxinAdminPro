@@ -7,6 +7,7 @@
 # | @updated   2026-06-08 03:25:00
 # | @updated   2026-06-09 10:40:13  T-003e：对外 ID 入参收口 hashid，入出参对称
 # | @updated   2026-06-09 16:09:17  T-004d：system 对外 ID 全链路 hashid（出参+path :id），补全 dict/config item 路径
+# | @updated   2026-06-14 15:35:00  T-005b-4 v0.11.0 列表查询能力；T-008b v0.12.0 用户详情加 roles 出参
 # +----------------------------------------------------------------------
 
 openapi: "3.0.3"
@@ -34,7 +35,13 @@ info:
             /sys/configs/{id} 三组 item 路径定义。hasher 抽至中立包 idcodec 供 rbac/system 共用（解耦）。
             PHP parity 扩展：system 对外 ID 亦为 hashid 字符串。注：system 响应 data 体未在 schema
             强类型化（沿用 ApiResponse 泛型包络），id 为 hashid 字符串这一约定以本说明为准。
-  version: "0.11.0"
+    v0.11.0: system/日志列表查询能力（T-005b-4）。dict/config/oper_log/login_log 列表补关键字模糊、
+            排序白名单、时间范围；dict_data 改服务端真分页。oper_log/sys_file 出参加 operator_name/
+            uploader_name（内部 ID JOIN sys_user 解析为用户名，已注销→「已注销」、空→「匿名」）。
+    v0.12.0: 用户出参加 roles（T-008b）。GET /sys/users/:id（预载）与 GET /sys/users（列表批量回填、
+            固定查询非 N+1）均返已授角色（id hashid + code/name）；无角色 omitempty 不输出。
+            供「分配角色」弹窗回填 + 列表角色列展示。写路径 PUT /sys/users/:id/roles（hashid 全量覆写）不变。
+  version: "0.12.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -194,6 +201,10 @@ components:
         remark: { type: string }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        roles:
+          type: array
+          description: "T-008b：已授角色。详情 GET /sys/users/:id 与列表 GET /sys/users 均返（列表为批量回填、固定查询非 N+1）；无角色时 omitempty 不输出。供分配角色弹窗回填 + 列表角色列展示。"
+          items: { $ref: "#/components/schemas/SysRole" }
 
     SysDept:
       type: object

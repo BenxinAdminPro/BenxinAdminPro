@@ -7,11 +7,13 @@
  * | @date      2026-06-08 16:00:00
  * | @updated   2026-06-12 14:24:57  T-007h：+getUser 详情（dept_id/posts 编辑回填来源）
  * | @updated   2026-06-14 14:30:00  T-008a：+resetUserPassword（PUT :id/password）+setUserStatus（PUT :id/status）
+ * | @updated   2026-06-14 15:55:00  T-008b：详情出参加 roles（分配角色回填）+assignUserRoles（PUT :id/roles 全量覆写）
  * +----------------------------------------------------------------------
  */
 import { http } from '@/request'
 import type { PageResult } from '@/request/types'
 import type { PostRow } from './post'
+import type { RoleRow } from './role'
 
 /** 用户行（响应字段，id/dept_id 为 hashid 字符串）。索引签名以兼容 x-table 的通用行类型。 */
 export interface UserRow extends Record<string, unknown> {
@@ -23,6 +25,8 @@ export interface UserRow extends Record<string, unknown> {
   status: number
   remark: string
   dept_id: string | null
+  // T-008b：已授角色（详情与列表均返、无角色 omitempty 缺省）。列表「角色」列展示 + 弹窗回填来源。
+  roles?: RoleRow[]
   created_at: string
   updated_at: string
 }
@@ -34,6 +38,7 @@ export interface UserRow extends Record<string, unknown> {
  */
 export interface UserDetail extends UserRow {
   posts?: PostRow[]
+  // roles 继承自 UserRow（T-008b：详情与列表均返）；分配角色弹窗回填读 detail.roles。
 }
 
 export function listUsers(params: Record<string, unknown>) {
@@ -71,4 +76,13 @@ export function resetUserPassword(id: string, password: string) {
  */
 export function setUserStatus(id: string, status: number) {
   return http.put(`/sys/users/${id}/status`, { status })
+}
+
+/**
+ * 分配角色（PUT /sys/users/:id/roles，权限码 sys:user:assign）。
+ * 入参 role_ids 为 hashid 数组，**全量覆写**该用户角色（service 先删后建 + 联动 Casbin g 规则）。
+ * 故提交前须以「当前已授全量」（详情 roles 回填）为基准改动，避免覆写丢角色。
+ */
+export function assignUserRoles(id: string, roleIds: string[]) {
+  return http.put(`/sys/users/${id}/roles`, { role_ids: roleIds })
 }
