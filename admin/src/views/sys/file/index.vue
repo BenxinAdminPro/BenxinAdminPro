@@ -5,6 +5,7 @@
   | @author    仗键天涯(daxing)
   | @email     3442535897@qq.com
   | @date      2026-06-10 17:19:28
+  | @updated   2026-06-14 11:55:00  T-005b-4：uploader 列改绑可读化字段 uploader_name；列筛选/排序后端已就绪
   +----------------------------------------------------------------------
   说明：x-table readonly 基底 + 工具栏插槽放上传（x-table 无上传能力、不为本片扩展）；
        上传 multipart 单文件字段名 file；客户端预校验（大小/扩展名）与 demo 后端默认值对齐，
@@ -13,9 +14,8 @@
        客户端落盘，禁用裸 <a href>（带不上 Authorization）。
        删除：按 id 软删 + 后端异步物理清理（单条语义，后端无批量端点，不造多选）。
        storage_key 随列表返回但不展示（最小暴露，T-004b 待办归后端加固，前端先规避）。
-       列筛选：uploader 真生效（后端精确匹配，存内部用户 ID，同 operlog operator 缺口已上报）；
-       original_name 降级透传（后端暂无该过滤参数）。排序：created_at 开关挂上、sort/order
-       透传，后端暂固定 id DESC（降级，同 T-005b 列表查询能力补齐项）。
+       T-005b-4：uploader 出参已可读化（uploader_name=用户名，已注销→「已注销」）；列筛选 uploader_name
+       按用户名模糊、original_name 模糊、created_at 排序后端均已就绪，filterable/sortable 真生效。
 -->
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -47,15 +47,15 @@ const config: XTableConfig = {
   readonly: true,
   api: { list: listFiles },
   columns: [
-    // original_name 为降级透传（后端暂无该过滤参数，已上报 T-005b），补参后零改动生效
+    // T-005b-4：original_name 模糊过滤后端已就绪，filterable 真生效
     { prop: 'original_name', label: '文件名', minWidth: 200, filterable: true },
     { prop: 'ext', label: '类型', width: 80 },
     { prop: 'mime', label: 'MIME', minWidth: 150 },
     { prop: 'size', label: '大小', width: 100, formatter: (_r, v) => sizeText(v) },
-    // uploader 过滤后端真生效（uploader= 精确匹配）。注意：存的是 JWT subject（内部用户 ID
-    // 字符串），与 operlog.operator 同源缺口（已上报），后端改存用户名后此处零改动生效
-    { prop: 'uploader', label: '上传人', width: 100, filterable: true },
-    // sortable 降级：后端列表固定 id DESC、不消费 sort/order（已上报），补参后零改动生效
+    // T-005b-4：列显示 uploader_name（后端 JOIN sys_user 解析的用户名，已注销→「已注销」、空→「匿名」）；
+    // 列筛选 uploader_name 后端按用户名模糊真生效（filter 参数名=prop=uploader_name）
+    { prop: 'uploader_name', label: '上传人', width: 100, filterable: true },
+    // T-005b-4：created_at 排序后端已就绪，sortable 真生效
     { prop: 'created_at', label: '上传时间', minWidth: 165, sortable: true, formatter: (_r, v) => dateText(v) },
   ],
   actions: [

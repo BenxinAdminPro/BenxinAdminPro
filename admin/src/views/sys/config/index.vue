@@ -5,6 +5,7 @@
   | @author    仗键天涯(daxing)
   | @email     3442535897@qq.com
   | @date      2026-06-10 09:38:01
+  | @updated   2026-06-14 11:58:00  T-005b-4：config_key 模糊 + created_at 排序后端已就绪，列筛选/排序真生效
   +----------------------------------------------------------------------
   说明：列表/新增走 x-table 内置（permPrefix sys:config）；行操作经 #row-actions 插槽自定义。
        加密参数（is_encrypted=1）：值由后端恒脱敏为 ******（maskEncrypted，T-005），前端无任何
@@ -12,7 +13,7 @@
        链路（CreateConfigInput 无 is_encrypted、Update 明文直写），界面编辑无论留空还是重填都会
        破坏密文，故安全降级为禁编辑（缺口已按 T-007c 模式上报，后端补语义后放开）。
        明文参数编辑走本页自有弹窗（config_key 唯一键禁改；表单仅回填非敏感明文值）。
-       列筛选开关已挂：参数并入 query 透传，后端 list 暂只读 page/page_size（降级，已上报）。
+       T-005b-4：后端 list 已支持 config_key 模糊 + created_at 排序，列筛选/排序真生效（加密写链路仍归 T-005b-3）。
 -->
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
@@ -35,7 +36,7 @@ const config: XTableConfig = {
     create: createConfig,
   },
   columns: [
-    // filterable：参数并入 query 透传，后端 list 暂无过滤参数（降级，已上报）
+    // T-005b-4：config_key 模糊过滤后端已就绪，filterable 真生效
     { prop: 'config_key', label: '参数键', minWidth: 150, filterable: true },
     { prop: 'name', label: '参数名', minWidth: 110 },
     { prop: 'config_value', label: '参数值', minWidth: 140 },

@@ -157,14 +157,14 @@ func TestFileIntegration_ListAndFilter(t *testing.T) {
 	svc.Upload(ctx, "b.txt", "text/plain", 1, strings.NewReader("x"), "bob")
 
 	// 全部
-	list, total, _ := svc.List(ctx, "", 1, 10)
+	list, total, _ := svc.List(ctx, FileListQuery{Page: 1, PageSize: 10})
 	if total != 2 {
 		t.Errorf("total: %d", total)
 	}
 	_ = list
 
-	// 按 uploader
-	_, total, _ = svc.List(ctx, "alice", 1, 10)
+	// 按文件名模糊（uploader 用户名过滤需 sys_user，归 query_integration_test.go 覆盖）
+	_, total, _ = svc.List(ctx, FileListQuery{OriginalName: "a.txt", Page: 1, PageSize: 10})
 	if total != 1 {
 		t.Errorf("filtered total: %d", total)
 	}

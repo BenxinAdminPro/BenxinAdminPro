@@ -53,12 +53,12 @@ func TestDictTypeCRUD(t *testing.T) {
 	if err == nil { t.Error("expected duplicate error") }
 
 	// 列表
-	list, total, _ := svc.ListTypes(ctx, 1, 10)
+	list, total, _ := svc.ListTypes(ctx, DictTypeListQuery{Page: 1, PageSize: 10})
 	if total != 1 || len(list) != 1 { t.Error("list wrong") }
 
 	// 删除
 	svc.DeleteType(ctx, dt.ID)
-	_, total, _ = svc.ListTypes(ctx, 1, 10)
+	_, total, _ = svc.ListTypes(ctx, DictTypeListQuery{Page: 1, PageSize: 10})
 	if total != 0 { t.Error("should be deleted") }
 }
 
@@ -71,8 +71,8 @@ func TestDictData(t *testing.T) {
 	svc.CreateData(ctx, CreateDictDataInput{DictType: "gender", Label: "男", Value: "1"})
 	svc.CreateData(ctx, CreateDictDataInput{DictType: "gender", Label: "女", Value: "2"})
 
-	list, _ := svc.ListDataByType(ctx, "gender")
-	if len(list) != 2 { t.Errorf("expected 2 items, got %d", len(list)) }
+	list, total, _ := svc.ListData(ctx, DictDataQuery{DictType: "gender", Page: 1, PageSize: 100})
+	if len(list) != 2 || total != 2 { t.Errorf("expected 2 items, got len=%d total=%d", len(list), total) }
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +177,13 @@ func TestLogServiceList(t *testing.T) {
 	sink.Write(context.Background(), SysOperLog{Operator: "editor", Method: "PUT", Path: "/sys/posts/1"})
 
 	svc := NewLogService(db)
-	list, total, _ := svc.ListOperLogs(context.Background(), "admin", nil, nil, 1, 10)
+	// 按 path 模糊过滤（operator 用户名过滤需真 sys_user 表，归集成测试覆盖）。
+	list, total, _ := svc.ListOperLogs(context.Background(), OperLogQuery{Path: "/sys/users", Page: 1, PageSize: 10})
 	if total != 1 { t.Errorf("filtered total: %d", total) }
 	if len(list) != 1 { t.Errorf("filtered list: %d", len(list)) }
+	// operator 为空（无 sys_user 解析）时展示名兜底为「匿名」而非崩溃。
+	all, _, _ := svc.ListOperLogs(context.Background(), OperLogQuery{Page: 1, PageSize: 10})
+	for _, e := range all {
+		if e.OperatorName == "" { t.Error("operator_name 应有兜底文案，不应为空") }
+	}
 }

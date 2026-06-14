@@ -7,6 +7,7 @@
 // | @updated   2026-06-08 02:40:00
 // | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 PermGuard，路由走真 enforce
 // | @updated   2026-06-09 16:09:17  T-004d：对外 ID hashid 化 — :id 解码 + 出参 encoder（注入 idcodec hasher）
+// | @updated   2026-06-14 10:55:00  T-005b-4：列表补文件名/上传人用户名模糊 + 排序（FileListQuery）
 // +----------------------------------------------------------------------
 
 package system
@@ -110,8 +111,14 @@ func (h *FileHandler) Download(c *gin.Context) {
 func (h *FileHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	uploader := c.Query("uploader")
-	list, total, _ := h.svc.List(c.Request.Context(), uploader, page, ps)
+	list, total, _ := h.svc.List(c.Request.Context(), FileListQuery{
+		UploaderName: c.Query("uploader_name"),
+		OriginalName: c.Query("original_name"),
+		Sort:         c.Query("sort"),
+		Order:        c.Query("order"),
+		Page:         page,
+		PageSize:     ps,
+	})
 	response.OK(c, h.enc.Page(list, total, page, ps))
 }
 

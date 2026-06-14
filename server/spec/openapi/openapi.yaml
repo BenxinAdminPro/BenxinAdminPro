@@ -34,7 +34,7 @@ info:
             /sys/configs/{id} 三组 item 路径定义。hasher 抽至中立包 idcodec 供 rbac/system 共用（解耦）。
             PHP parity 扩展：system 对外 ID 亦为 hashid 字符串。注：system 响应 data 体未在 schema
             强类型化（沿用 ApiResponse 泛型包络），id 为 hashid 字符串这一约定以本说明为准。
-  version: "0.10.0"
+  version: "0.11.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -977,8 +977,18 @@ paths:
     get:
       tags: [System]
       summary: 字典类型列表
+      description: "T-005b-4：补关键字模糊（keyword 搜 dict_type/name）、dict_type/name 模糊、status 过滤、排序白名单（created_at/id）。"
       operationId: listDictTypes
       security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+        - { name: keyword, in: query, schema: { type: string }, description: "dict_type/name 模糊" }
+        - { name: dict_type, in: query, schema: { type: string }, description: "字典类型编码模糊" }
+        - { name: name, in: query, schema: { type: string }, description: "名称模糊" }
+        - { name: status, in: query, schema: { type: integer } }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, id] }, description: "排序字段白名单，非白名单忽略" }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
       responses:
         "200":
           description: 成功
@@ -1048,12 +1058,19 @@ paths:
     get:
       tags: [System]
       summary: 按类型查字典项
+      description: "T-005b-4：改服务端真分页（原返全量数组 → 标准分页包络 {list,total,page,page_size}）；补 keyword（label/value 模糊）+ 排序白名单（created_at/sort/id）。"
       operationId: listDictData
       security: [{ BearerAuth: [] }]
-      parameters: [{ name: dict_type, in: query, required: true, schema: { type: string } }]
+      parameters:
+        - { name: dict_type, in: query, required: true, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+        - { name: keyword, in: query, schema: { type: string }, description: "label/value 模糊" }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, sort, id] } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
       responses:
         "200":
-          description: 成功
+          description: "成功（T-005b-4 起为分页包络，非裸数组）"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiResponse" }
@@ -1100,8 +1117,18 @@ paths:
     get:
       tags: [System]
       summary: 参数列表
+      description: "T-005b-4：补关键字模糊（keyword 搜 config_key/name）、config_key/name 模糊、is_encrypted 过滤、排序白名单（created_at/id）。"
       operationId: listConfigs
       security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+        - { name: keyword, in: query, schema: { type: string }, description: "config_key/name 模糊" }
+        - { name: config_key, in: query, schema: { type: string }, description: "参数键模糊" }
+        - { name: name, in: query, schema: { type: string }, description: "参数名模糊" }
+        - { name: is_encrypted, in: query, schema: { type: integer, enum: [0, 1] } }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, id] } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
       responses:
         "200":
           description: 成功
@@ -1171,17 +1198,29 @@ paths:
     get:
       tags: [System]
       summary: 操作日志列表
+      description: >-
+        T-005b-4：operator 出参可读化（新增 operator_name=用户名，已注销→「已注销」、空→「匿名」；
+        operator 内部 ID 不直接暴露）。过滤改为按用户名（operator_name 模糊）+ path 模糊 + 时间范围
+        （start_time/end_time）+ 排序白名单（created_at/latency_ms/result_code）。时间非法/start>end → 400。
       operationId: listOperLogs
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: operator, in: query, schema: { type: string } }
+        - { name: operator_name, in: query, schema: { type: string }, description: "按操作人用户名模糊" }
+        - { name: path, in: query, schema: { type: string }, description: "请求路径模糊" }
+        - { name: start_time, in: query, schema: { type: string }, description: "时间范围起（RFC3339/2006-01-02 15:04:05/纯日期）" }
+        - { name: end_time, in: query, schema: { type: string }, description: "时间范围止（含；纯日期补当日末）" }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, latency_ms, result_code, id] } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
         - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
       responses:
         "200":
           description: 成功
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiResponse" }
+        "400":
+          description: 时间范围参数非法或 start>end
     delete:
       tags: [System]
       summary: 清理操作日志
@@ -1198,17 +1237,27 @@ paths:
     get:
       tags: [System]
       summary: 登录日志列表
+      description: "T-005b-4：username/ip 模糊 + success 过滤 + 时间范围（start_time/end_time）+ 排序白名单（created_at）。时间非法/start>end → 400。"
       operationId: listLoginLogs
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: username, in: query, schema: { type: string } }
+        - { name: username, in: query, schema: { type: string }, description: "用户名模糊" }
+        - { name: ip, in: query, schema: { type: string }, description: "IP 模糊" }
+        - { name: success, in: query, schema: { type: integer, enum: [0, 1] } }
+        - { name: start_time, in: query, schema: { type: string } }
+        - { name: end_time, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, id] } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
         - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
       responses:
         "200":
           description: 成功
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiResponse" }
+        "400":
+          description: 时间范围参数非法或 start>end
     delete:
       tags: [System]
       summary: 清理登录日志
@@ -1251,10 +1300,14 @@ paths:
     get:
       tags: [File]
       summary: 文件列表
+      description: "T-005b-4：uploader 出参可读化（新增 uploader_name=用户名，已注销→「已注销」、空→「匿名」）。过滤改为按用户名（uploader_name 模糊）+ original_name 模糊 + 排序白名单（created_at/size）。"
       operationId: listFiles
       security: [{ BearerAuth: [] }]
       parameters:
-        - { name: uploader, in: query, schema: { type: string } }
+        - { name: uploader_name, in: query, schema: { type: string }, description: "按上传人用户名模糊" }
+        - { name: original_name, in: query, schema: { type: string }, description: "文件名模糊" }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, size, id] } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
         - { name: page, in: query, schema: { type: integer } }
         - { name: page_size, in: query, schema: { type: integer } }
       responses:

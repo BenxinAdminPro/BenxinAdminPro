@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 01:18:00
+// | @updated   2026-06-14 10:35:00  T-005b-4：SysFile 加非持久化 UploaderName（上传人可读化出参）
 // +----------------------------------------------------------------------
 
 package system
@@ -28,4 +29,8 @@ type SysFile struct {
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+
+	// 非持久化：上传人可读化展示名（由 service JOIN sys_user 解析填充；
+	// gorm:"-" 不参与读写/迁移，仅随 json 出参，uploader 内部 ID 不直接暴露）。
+	UploaderName string `gorm:"-" json:"uploader_name"`
 }

@@ -89,7 +89,7 @@ func TestIntegration_OperLogFallthrough(t *testing.T) {
 	svc := NewLogService(db)
 
 	// 全部
-	list, total, _ := svc.ListOperLogs(ctx, "", nil, nil, 1, 10)
+	list, total, _ := svc.ListOperLogs(ctx, OperLogQuery{Page: 1, PageSize: 10})
 	if total != 2 {
 		t.Errorf("total oper logs: got %d, want 2", total)
 	}
@@ -97,8 +97,8 @@ func TestIntegration_OperLogFallthrough(t *testing.T) {
 		t.Errorf("list len: got %d", len(list))
 	}
 
-	// 按 operator 过滤
-	list, total, _ = svc.ListOperLogs(ctx, "admin", nil, nil, 1, 10)
+	// 按 path 模糊过滤（operator 用户名过滤见 query_integration_test.go）
+	_, total, _ = svc.ListOperLogs(ctx, OperLogQuery{Path: "/sys/users", Page: 1, PageSize: 10})
 	if total != 1 {
 		t.Errorf("filtered total: got %d, want 1", total)
 	}
@@ -114,13 +114,13 @@ func TestIntegration_LoginLogFallthrough(t *testing.T) {
 
 	svc := NewLogService(db)
 
-	list, total, _ := svc.ListLoginLogs(ctx, "", 1, 10)
+	list, total, _ := svc.ListLoginLogs(ctx, LoginLogQuery{Page: 1, PageSize: 10})
 	if total != 2 {
 		t.Errorf("total login logs: got %d, want 2", total)
 	}
 
 	// 按 username 过滤
-	list, total, _ = svc.ListLoginLogs(ctx, "alice", 1, 10)
+	list, total, _ = svc.ListLoginLogs(ctx, LoginLogQuery{Username: "alice", Page: 1, PageSize: 10})
 	if total != 1 || len(list) != 1 {
 		t.Errorf("filtered: total=%d len=%d", total, len(list))
 	}

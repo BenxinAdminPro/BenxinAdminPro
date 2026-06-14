@@ -129,17 +129,23 @@ func TestUploaderFillE2E(t *testing.T) {
 	}
 	t.Logf("uploader OK: sys_file.uploader=%q（非空、= 上传者 Subject）", row.Uploader)
 
-	// ---- uploader 过滤可用：GET /sys/files?uploader=<id> 应能筛到该文件 ----
-	listed := doJSON(t, http.MethodGet, ts.URL+"/sys/files?uploader="+mgrSubject, tok, nil)
+	// ---- uploader 过滤可用：T-005b-4 起按用户名过滤 GET /sys/files?uploader_name=dept_mgr ----
+	listed := doJSON(t, http.MethodGet, ts.URL+"/sys/files?uploader_name=dept_mgr", tok, nil)
 	if listed.status != http.StatusOK {
-		t.Fatalf("list by uploader: %d %+v", listed.status, listed.body)
+		t.Fatalf("list by uploader_name: %d %+v", listed.status, listed.body)
 	}
 	d := dataMap(t, listed)
 	total, _ := d["total"].(float64)
 	if total < 1 {
-		t.Fatalf("uploader 过滤不可用：按 uploader=%s 过滤 total=%v，期望 ≥1", mgrSubject, d["total"])
+		t.Fatalf("uploader 过滤不可用：按 uploader_name=dept_mgr 过滤 total=%v，期望 ≥1", d["total"])
 	}
-	t.Logf("uploader 过滤 OK: GET /sys/files?uploader=%s total=%v", mgrSubject, d["total"])
+	// 出参 uploader_name 应解析为用户名
+	if rows, ok := d["list"].([]any); ok && len(rows) > 0 {
+		if r0, _ := rows[0].(map[string]any); r0["uploader_name"] != "dept_mgr" {
+			t.Fatalf("uploader_name 未解析为用户名：got %v", r0["uploader_name"])
+		}
+	}
+	t.Logf("uploader 过滤 + 可读化 OK: GET /sys/files?uploader_name=dept_mgr total=%v", d["total"])
 
 	t.Log("ALL PASSED: uploader 真落值 + 过滤可用（T-005b-2 GetSubject() 修复生效）")
 }

@@ -5,14 +5,15 @@
   | @author    仗键天涯(daxing)
   | @email     3442535897@qq.com
   | @date      2026-06-10 12:02:21
+  | @updated   2026-06-14 11:50:00  T-005b-4：operator 列改绑可读化字段 operator_name；列筛选/排序后端已就绪
   +----------------------------------------------------------------------
   说明：x-table readonly 模式（api 只给 list，无增改删）；行操作「详情」用列表行内数据弹窗
        展示长字段（后端无详情端点，req_summary/user_agent 等已随列表返回，不发额外请求）。
        req_summary 敏感字段由后端脱敏为 ***（T-004a Sanitize），前端原样展示、不还原、不打印。
        清理：后端 DELETE /sys/logs/oper 无入参、固定删 3 个月前（handler 硬编码），破坏性操作
        走工具栏按钮 + 二次确认明示范围，挂独立权限码 sys:operlog:clean。
-       列筛选：operator 真生效（后端精确匹配）；path 降级透传（后端暂无该过滤参数，已上报）。
-       排序：created_at 开关挂上、sort/order 透传，后端暂固定 id DESC（降级，已上报）。
+       T-005b-4：operator 出参已可读化（operator_name=用户名，已注销→「已注销」）；列筛选 operator_name
+       按用户名模糊、path 模糊、created_at/latency_ms 排序后端均已就绪，filterable/sortable 真生效。
 -->
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -31,17 +32,16 @@ const config: XTableConfig = {
   readonly: true,
   api: { list: listOperLogs },
   columns: [
-    // operator 过滤后端真生效（operator= 精确匹配）。注意：后端采集存的是 JWT subject
-    // （内部用户 ID 字符串，如 "1"）而非用户名——列显示与过滤值均为该 ID（缺口已上报，
-    // 后端改存用户名后此处零改动生效）；path 为降级透传（后端暂无此参数，已上报）
-    { prop: 'operator', label: '操作人', width: 110, filterable: true },
+    // T-005b-4：列显示 operator_name（后端 JOIN sys_user 解析的用户名，已注销→「已注销」、空→「匿名」）；
+    // 列筛选 operator_name 后端按用户名模糊真生效（filter 参数名=prop=operator_name）；path 模糊真生效
+    { prop: 'operator_name', label: '操作人', width: 110, filterable: true },
     { prop: 'method', label: '方法', width: 80 },
     { prop: 'path', label: '路径', minWidth: 170, filterable: true },
     { prop: 'perm_code', label: '权限码', minWidth: 150 },
     { prop: 'ip', label: 'IP', width: 130 },
     { prop: 'result_code', label: '结果', width: 80, formatter: (_r, v) => resultText(v) },
-    { prop: 'latency_ms', label: '耗时(ms)', width: 95 },
-    // sortable 降级：后端列表暂固定 id DESC、不消费 sort/order（已上报），补参后零改动生效
+    { prop: 'latency_ms', label: '耗时(ms)', width: 95, sortable: true },
+    // T-005b-4：created_at/latency_ms 排序后端已就绪，sortable 真生效
     { prop: 'created_at', label: '操作时间', minWidth: 165, sortable: true, formatter: (_r, v) => dateText(v) },
   ],
   // 详情用行内数据弹窗（后端无详情端点）；列表权限即门槛，不挂额外权限码
@@ -96,7 +96,7 @@ async function onClean(): Promise<void> {
     <!-- 详情弹窗：长字段（请求摘要/UA）完整展示 -->
     <el-dialog v-model="detailVisible" title="操作日志详情" width="640px" destroy-on-close>
       <el-descriptions v-if="detail" :column="2" border>
-        <el-descriptions-item label="操作人">{{ detail.operator }}</el-descriptions-item>
+        <el-descriptions-item label="操作人">{{ detail.operator_name }}</el-descriptions-item>
         <el-descriptions-item label="操作时间">{{ dateText(detail.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="方法">{{ detail.method }}</el-descriptions-item>
         <el-descriptions-item label="路径">{{ detail.path }}</el-descriptions-item>

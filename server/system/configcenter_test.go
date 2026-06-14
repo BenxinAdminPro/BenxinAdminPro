@@ -231,7 +231,7 @@ func TestConfigService_EncryptedMaskedInList(t *testing.T) {
 	db.Create(&SysConfig{ConfigKey: "site.url", ConfigValue: "https://example.com", IsEncrypted: 0, Name: "站点URL"})
 
 	svc := NewConfigService(db, func() *errcode.Registry { r, _ := errcode.NewRegistry(11000); return r }())
-	list, _, _ := svc.List(context.Background(), 1, 10)
+	list, _, _ := svc.List(context.Background(), ConfigListQuery{Page: 1, PageSize: 10})
 
 	for _, cfg := range list {
 		if cfg.IsEncrypted == 1 {

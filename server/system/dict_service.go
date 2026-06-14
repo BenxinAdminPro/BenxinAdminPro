@@ -6,6 +6,7 @@
 // | @date      2026-06-08 00:15:00
 // | @updated   2026-06-08 03:40:00
 // | @updated   2026-06-09 17:00:00  T-004e：唯一键冲突(1062)兜底转友好码（dict_type/config_key 防 500）
+// | @updated   2026-06-14 10:40:00  T-005b-4：dict/config 列表补关键字模糊 + 排序白名单；dict_data 真分页
 // +----------------------------------------------------------------------
 
 package system
@@ -54,13 +55,47 @@ func (s *DictService) CreateType(ctx context.Context, in CreateDictTypeInput) (*
 	return &dt, nil
 }
 
-func (s *DictService) ListTypes(ctx context.Context, page, pageSize int) ([]SysDictType, int64, error) {
-	if page <= 0 { page = 1 }
-	if pageSize <= 0 || pageSize > 100 { pageSize = 20 }
+// DictTypeListQuery 字典类型列表查询参数。
+type DictTypeListQuery struct {
+	Keyword  string // 关键字：dict_type / name 模糊
+	DictType string // 字典类型编码模糊（前端列筛选 dict_type）
+	Name     string // 名称模糊
+	Status   *int8  // 状态精确
+	Sort     string // 排序字段（白名单）
+	Order    string // asc / desc
+	Page     int
+	PageSize int
+}
+
+func (q *DictTypeListQuery) normalize() {
+	if q.Page <= 0 { q.Page = 1 }
+	if q.PageSize <= 0 || q.PageSize > 100 { q.PageSize = 20 }
+}
+
+// dictTypeSortable 排序白名单：对外字段 → 真实列。
+var dictTypeSortable = map[string]string{"created_at": "created_at", "id": "id"}
+
+func (s *DictService) ListTypes(ctx context.Context, q DictTypeListQuery) ([]SysDictType, int64, error) {
+	q.normalize()
+	query := s.db.WithContext(ctx).Model(&SysDictType{})
+	if q.Keyword != "" {
+		kw := likePattern(q.Keyword)
+		query = query.Where("dict_type LIKE ? OR name LIKE ?", kw, kw)
+	}
+	if q.DictType != "" {
+		query = query.Where("dict_type LIKE ?", likePattern(q.DictType))
+	}
+	if q.Name != "" {
+		query = query.Where("name LIKE ?", likePattern(q.Name))
+	}
+	if q.Status != nil {
+		query = query.Where("status = ?", *q.Status)
+	}
 	var total int64
-	s.db.WithContext(ctx).Model(&SysDictType{}).Count(&total)
+	query.Count(&total)
 	var list []SysDictType
-	s.db.WithContext(ctx).Offset((page-1)*pageSize).Limit(pageSize).Order("id ASC").Find(&list)
+	query = applySort(query, q.Sort, q.Order, dictTypeSortable, "id ASC")
+	query.Offset((q.Page-1)*q.PageSize).Limit(q.PageSize).Find(&list)
 	return list, total, nil
 }
 
@@ -103,10 +138,39 @@ func (s *DictService) CreateData(ctx context.Context, in CreateDictDataInput) (*
 	return &dd, nil
 }
 
-func (s *DictService) ListDataByType(ctx context.Context, dictType string) ([]SysDictData, error) {
+// DictDataQuery 字典项列表查询参数。
+type DictDataQuery struct {
+	DictType string // 必填：按字典类型筛选（前端始终携带选中类型）
+	Keyword  string // 关键字：label / value 模糊
+	Sort     string
+	Order    string
+	Page     int
+	PageSize int
+}
+
+func (q *DictDataQuery) normalize() {
+	if q.Page <= 0 { q.Page = 1 }
+	if q.PageSize <= 0 || q.PageSize > 100 { q.PageSize = 20 }
+}
+
+// dictDataSortable 排序白名单。默认按 sort,id 升序（保留原 ListDataByType 口径）。
+var dictDataSortable = map[string]string{"created_at": "created_at", "sort": "sort", "id": "id"}
+
+// ListData 字典项真分页列表（T-005b-4：原 ListDataByType 返全量数组 → 服务端分页）。
+// DictType 为空返回空集（前端未选类型时不应发请求；空 dict_type 不匹配任何项）。
+func (s *DictService) ListData(ctx context.Context, q DictDataQuery) ([]SysDictData, int64, error) {
+	q.normalize()
+	query := s.db.WithContext(ctx).Model(&SysDictData{}).Where("dict_type = ?", q.DictType)
+	if q.Keyword != "" {
+		kw := likePattern(q.Keyword)
+		query = query.Where("label LIKE ? OR value LIKE ?", kw, kw)
+	}
+	var total int64
+	query.Count(&total)
 	var list []SysDictData
-	err := s.db.WithContext(ctx).Where("dict_type = ?", dictType).Order("sort ASC, id ASC").Find(&list).Error
-	return list, err
+	query = applySort(query, q.Sort, q.Order, dictDataSortable, "sort ASC, id ASC")
+	query.Offset((q.Page-1)*q.PageSize).Limit(q.PageSize).Find(&list)
+	return list, total, nil
 }
 
 func (s *DictService) UpdateData(ctx context.Context, id uint64, in CreateDictDataInput) error {
@@ -170,13 +234,46 @@ func (s *ConfigService) GetByKey(ctx context.Context, key string) (*SysConfig, e
 	return &cfg, nil
 }
 
-func (s *ConfigService) List(ctx context.Context, page, pageSize int) ([]SysConfig, int64, error) {
-	if page <= 0 { page = 1 }
-	if pageSize <= 0 || pageSize > 100 { pageSize = 20 }
+// ConfigListQuery 参数列表查询参数。
+type ConfigListQuery struct {
+	Keyword     string // 关键字：config_key / name 模糊
+	ConfigKey   string // 参数键模糊（前端列筛选 config_key）
+	Name        string // 参数名模糊
+	IsEncrypted *int8  // 加密标志精确过滤
+	Sort        string
+	Order       string
+	Page        int
+	PageSize    int
+}
+
+func (q *ConfigListQuery) normalize() {
+	if q.Page <= 0 { q.Page = 1 }
+	if q.PageSize <= 0 || q.PageSize > 100 { q.PageSize = 20 }
+}
+
+var configSortable = map[string]string{"created_at": "created_at", "id": "id"}
+
+func (s *ConfigService) List(ctx context.Context, q ConfigListQuery) ([]SysConfig, int64, error) {
+	q.normalize()
+	query := s.db.WithContext(ctx).Model(&SysConfig{})
+	if q.Keyword != "" {
+		kw := likePattern(q.Keyword)
+		query = query.Where("config_key LIKE ? OR name LIKE ?", kw, kw)
+	}
+	if q.ConfigKey != "" {
+		query = query.Where("config_key LIKE ?", likePattern(q.ConfigKey))
+	}
+	if q.Name != "" {
+		query = query.Where("name LIKE ?", likePattern(q.Name))
+	}
+	if q.IsEncrypted != nil {
+		query = query.Where("is_encrypted = ?", *q.IsEncrypted)
+	}
 	var total int64
-	s.db.WithContext(ctx).Model(&SysConfig{}).Count(&total)
+	query.Count(&total)
 	var list []SysConfig
-	s.db.WithContext(ctx).Offset((page-1)*pageSize).Limit(pageSize).Order("id ASC").Find(&list)
+	query = applySort(query, q.Sort, q.Order, configSortable, "id ASC")
+	query.Offset((q.Page-1)*q.PageSize).Limit(q.PageSize).Find(&list)
 	// 加密参数脱敏
 	for i := range list {
 		maskEncrypted(&list[i])

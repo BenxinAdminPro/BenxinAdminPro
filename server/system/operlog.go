@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 00:18:00
+// | @updated   2026-06-14 10:45:00  T-005b-4：oper/login 列表补用户名模糊/路径/时间范围/排序 + operator 可读化
 // +----------------------------------------------------------------------
 
 package system
@@ -167,24 +168,76 @@ func NewLogService(db *gorm.DB) *LogService {
 	return &LogService{db: db}
 }
 
-func (s *LogService) ListOperLogs(ctx context.Context, operator string, startTime, endTime *time.Time, page, pageSize int) ([]SysOperLog, int64, error) {
-	if page <= 0 { page = 1 }
-	if pageSize <= 0 || pageSize > 100 { pageSize = 20 }
+// OperLogQuery 操作日志列表查询参数。
+type OperLogQuery struct {
+	OperatorName string     // 按操作人用户名模糊（先映射 username→内部 ID 集再过滤 operator 列）
+	Path         string     // 请求路径模糊
+	StartTime    *time.Time // 时间范围起（含）
+	EndTime      *time.Time // 时间范围止（含）
+	Sort         string
+	Order        string
+	Page         int
+	PageSize     int
+}
+
+func (q *OperLogQuery) normalize() {
+	if q.Page <= 0 { q.Page = 1 }
+	if q.PageSize <= 0 || q.PageSize > 100 { q.PageSize = 20 }
+}
+
+// operLogSortable 排序白名单。默认 id DESC（最新在前）。
+var operLogSortable = map[string]string{
+	"created_at":  "created_at",
+	"latency_ms":  "latency_ms",
+	"result_code": "result_code",
+	"id":          "id",
+}
+
+func (s *LogService) ListOperLogs(ctx context.Context, q OperLogQuery) ([]SysOperLog, int64, error) {
+	q.normalize()
 	query := s.db.WithContext(ctx).Model(&SysOperLog{})
-	if operator != "" {
-		query = query.Where("operator = ?", operator)
+	if q.OperatorName != "" {
+		// operator 存内部 ID 字符串；按用户名过滤须先映射用户名→ID 集。
+		ids := userIDsByName(ctx, s.db, q.OperatorName)
+		if len(ids) == 0 {
+			query = query.Where("1 = 0") // 无任何用户名匹配 → 空结果（而非不过滤）
+		} else {
+			query = query.Where("operator IN ?", ids)
+		}
 	}
-	if startTime != nil {
-		query = query.Where("created_at >= ?", *startTime)
+	if q.Path != "" {
+		query = query.Where("path LIKE ?", likePattern(q.Path))
 	}
-	if endTime != nil {
-		query = query.Where("created_at <= ?", *endTime)
+	if q.StartTime != nil {
+		query = query.Where("created_at >= ?", *q.StartTime)
+	}
+	if q.EndTime != nil {
+		query = query.Where("created_at <= ?", *q.EndTime)
 	}
 	var total int64
 	query.Count(&total)
 	var list []SysOperLog
-	query.Offset((page-1)*pageSize).Limit(pageSize).Order("id DESC").Find(&list)
+	query = applySort(query, q.Sort, q.Order, operLogSortable, "id DESC")
+	query.Offset((q.Page-1)*q.PageSize).Limit(q.PageSize).Find(&list)
+	fillOperatorNames(ctx, s.db, list)
 	return list, total, nil
+}
+
+// fillOperatorNames 批量解析本页 operator 内部 ID → 用户名展示（一次查询）。
+func fillOperatorNames(ctx context.Context, db *gorm.DB, list []SysOperLog) {
+	if len(list) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(list))
+	for i := range list {
+		if list[i].Operator != "" {
+			ids = append(ids, list[i].Operator)
+		}
+	}
+	names := resolveUserNames(ctx, db, ids)
+	for i := range list {
+		list[i].OperatorName = displayUserName(list[i].Operator, names)
+	}
 }
 
 func (s *LogService) CleanOperLogs(ctx context.Context, before time.Time) (int64, error) {
@@ -192,17 +245,49 @@ func (s *LogService) CleanOperLogs(ctx context.Context, before time.Time) (int64
 	return result.RowsAffected, result.Error
 }
 
-func (s *LogService) ListLoginLogs(ctx context.Context, username string, page, pageSize int) ([]SysLoginLog, int64, error) {
-	if page <= 0 { page = 1 }
-	if pageSize <= 0 || pageSize > 100 { pageSize = 20 }
+// LoginLogQuery 登录日志列表查询参数。
+type LoginLogQuery struct {
+	Username  string     // 用户名模糊（登录日志直接存 username，无需可读化）
+	IP        string     // IP 模糊
+	Success   *int8      // 登录结果精确（0 失败 / 1 成功）
+	StartTime *time.Time // 时间范围起（含）
+	EndTime   *time.Time // 时间范围止（含）
+	Sort      string
+	Order     string
+	Page      int
+	PageSize  int
+}
+
+func (q *LoginLogQuery) normalize() {
+	if q.Page <= 0 { q.Page = 1 }
+	if q.PageSize <= 0 || q.PageSize > 100 { q.PageSize = 20 }
+}
+
+var loginLogSortable = map[string]string{"created_at": "created_at", "id": "id"}
+
+func (s *LogService) ListLoginLogs(ctx context.Context, q LoginLogQuery) ([]SysLoginLog, int64, error) {
+	q.normalize()
 	query := s.db.WithContext(ctx).Model(&SysLoginLog{})
-	if username != "" {
-		query = query.Where("username = ?", username)
+	if q.Username != "" {
+		query = query.Where("username LIKE ?", likePattern(q.Username))
+	}
+	if q.IP != "" {
+		query = query.Where("ip LIKE ?", likePattern(q.IP))
+	}
+	if q.Success != nil {
+		query = query.Where("success = ?", *q.Success)
+	}
+	if q.StartTime != nil {
+		query = query.Where("created_at >= ?", *q.StartTime)
+	}
+	if q.EndTime != nil {
+		query = query.Where("created_at <= ?", *q.EndTime)
 	}
 	var total int64
 	query.Count(&total)
 	var list []SysLoginLog
-	query.Offset((page-1)*pageSize).Limit(pageSize).Order("id DESC").Find(&list)
+	query = applySort(query, q.Sort, q.Order, loginLogSortable, "id DESC")
+	query.Offset((q.Page-1)*q.PageSize).Limit(q.PageSize).Find(&list)
 	return list, total, nil
 }
 

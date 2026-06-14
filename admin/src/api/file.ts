@@ -13,8 +13,8 @@ import type { PageResult } from '@/request/types'
 /**
  * 文件元信息行（id 为 hashid 字符串）。
  * storage_key 为相对存储 key（yyyy/MM/dd/uuid.ext），随列表返回但页面不展示（最小暴露）。
- * uploader 为后端采集的 JWT subject（内部用户 ID 字符串），与 operlog.operator 同源缺口
- * （已上报 T-005b），后端改存用户名后前端零改动生效。
+ * uploader 为后端采集的 JWT subject（内部用户 ID 字符串，不直接展示）；
+ * T-005b-4 起后端随列表返回 uploader_name（JOIN 解析的用户名），前端显示该字段。
  */
 export interface SysFileRow extends Record<string, unknown> {
   id: string
@@ -24,13 +24,14 @@ export interface SysFileRow extends Record<string, unknown> {
   size: number
   mime: string
   ext: string
-  uploader: string
+  uploader: string // 内部用户 ID 字符串（采集原值，不直接展示）
+  uploader_name: string // T-005b-4：后端 JOIN 解析的用户名（已注销→「已注销」、空→「匿名」）
   status: number
   created_at: string
   updated_at: string
 }
 
-/** 列表。后端支持 page/page_size/uploader（精确匹配）；其余参数透传（后端暂不消费，降级）。 */
+/** 列表。T-005b-4：后端支持 uploader_name（用户名模糊）/original_name（模糊）/sort/order。 */
 export function listFiles(params: Record<string, unknown>) {
   return http.get<PageResult<SysFileRow>>('/sys/files', { params })
 }

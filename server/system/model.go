@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 00:10:00
 // | @updated   2026-06-08 03:04:00
+// | @updated   2026-06-14 10:35:00  T-005b-4：SysOperLog 加非持久化 OperatorName（操作人可读化出参）
 // +----------------------------------------------------------------------
 
 package system
@@ -86,6 +87,10 @@ type SysOperLog struct {
 	ResultCode int       `gorm:"type:int" json:"result_code"`
 	LatencyMs  int       `gorm:"type:int" json:"latency_ms"`
 	CreatedAt  time.Time `json:"created_at"`
+
+	// 非持久化：操作人可读化展示名（由 service JOIN sys_user 解析填充；
+	// gorm:"-" 不参与读写/迁移，仅随 json 出参，operator 内部 ID 不直接暴露）。
+	OperatorName string `gorm:"-" json:"operator_name"`
 }
 
 // ---------------------------------------------------------------------------

@@ -18,7 +18,8 @@ import type { PageResult } from '@/request/types'
  */
 export interface OperLogRow extends Record<string, unknown> {
   id: string
-  operator: string
+  operator: string // 内部用户 ID 字符串（采集原值，不直接展示）
+  operator_name: string // T-005b-4：后端 JOIN 解析的用户名（已注销→「已注销」、空→「匿名」）
   method: string
   path: string
   perm_code: string
@@ -30,7 +31,7 @@ export interface OperLogRow extends Record<string, unknown> {
   created_at: string
 }
 
-/** 列表。后端支持 page/page_size/operator（精确匹配）；其余参数透传（后端暂不消费，降级）。 */
+/** 列表。T-005b-4：后端支持 operator_name（用户名模糊）/path（模糊）/start_time/end_time/sort/order。 */
 export function listOperLogs(params: Record<string, unknown>) {
   return http.get<PageResult<OperLogRow>>('/sys/logs/oper', { params })
 }

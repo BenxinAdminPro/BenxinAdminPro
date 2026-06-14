@@ -7,6 +7,7 @@
 // | @updated   2026-06-08 02:40:00
 // | @updated   2026-06-08 13:00:00  T-003d：删本地"假"requirePerm，RegisterRoutes 注入 PermGuard 真 enforce
 // | @updated   2026-06-09 16:09:17  T-004d：对外 ID hashid 化 — path :id 解码 + 出参 encoder（注入 idcodec hasher）
+// | @updated   2026-06-14 10:52:00  T-005b-4：dict/config/日志列表补查询参数（模糊/时间范围/排序）+ dict_data 真分页
 // +----------------------------------------------------------------------
 
 package system
@@ -81,7 +82,16 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup, guard PermGuard) {
 func (h *Handler) ListDictTypes(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	list, total, _ := h.dictSvc.ListTypes(c.Request.Context(), page, ps)
+	list, total, _ := h.dictSvc.ListTypes(c.Request.Context(), DictTypeListQuery{
+		Keyword:  c.Query("keyword"),
+		DictType: c.Query("dict_type"),
+		Name:     c.Query("name"),
+		Status:   queryInt8Ptr(c, "status"),
+		Sort:     c.Query("sort"),
+		Order:    c.Query("order"),
+		Page:     page,
+		PageSize: ps,
+	})
 	response.OK(c, h.enc.Page(list, total, page, ps))
 }
 
@@ -112,9 +122,17 @@ func (h *Handler) DeleteDictType(c *gin.Context) {
 // --- 字典项 ---
 
 func (h *Handler) ListDictData(c *gin.Context) {
-	dictType := c.Query("dict_type")
-	list, _ := h.dictSvc.ListDataByType(c.Request.Context(), dictType)
-	response.OK(c, h.enc.Items(list))
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	list, total, _ := h.dictSvc.ListData(c.Request.Context(), DictDataQuery{
+		DictType: c.Query("dict_type"),
+		Keyword:  c.Query("keyword"),
+		Sort:     c.Query("sort"),
+		Order:    c.Query("order"),
+		Page:     page,
+		PageSize: ps,
+	})
+	response.OK(c, h.enc.Page(list, total, page, ps))
 }
 
 func (h *Handler) CreateDictData(c *gin.Context) {
@@ -146,7 +164,16 @@ func (h *Handler) DeleteDictData(c *gin.Context) {
 func (h *Handler) ListConfigs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	list, total, _ := h.configSvc.List(c.Request.Context(), page, ps)
+	list, total, _ := h.configSvc.List(c.Request.Context(), ConfigListQuery{
+		Keyword:     c.Query("keyword"),
+		ConfigKey:   c.Query("config_key"),
+		Name:        c.Query("name"),
+		IsEncrypted: queryInt8Ptr(c, "is_encrypted"),
+		Sort:        c.Query("sort"),
+		Order:       c.Query("order"),
+		Page:        page,
+		PageSize:    ps,
+	})
 	response.OK(c, h.enc.Page(list, total, page, ps))
 }
 
@@ -179,8 +206,20 @@ func (h *Handler) DeleteConfig(c *gin.Context) {
 func (h *Handler) ListOperLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	operator := c.Query("operator")
-	list, total, _ := h.logSvc.ListOperLogs(c.Request.Context(), operator, nil, nil, page, ps)
+	start, end, ok := parseTimeRange(c)
+	if !ok {
+		return // parseTimeRange 已写 400
+	}
+	list, total, _ := h.logSvc.ListOperLogs(c.Request.Context(), OperLogQuery{
+		OperatorName: c.Query("operator_name"),
+		Path:         c.Query("path"),
+		StartTime:    start,
+		EndTime:      end,
+		Sort:         c.Query("sort"),
+		Order:        c.Query("order"),
+		Page:         page,
+		PageSize:     ps,
+	})
 	response.OK(c, h.enc.Page(list, total, page, ps))
 }
 
@@ -193,9 +232,58 @@ func (h *Handler) CleanOperLogs(c *gin.Context) {
 func (h *Handler) ListLoginLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	ps, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	username := c.Query("username")
-	list, total, _ := h.logSvc.ListLoginLogs(c.Request.Context(), username, page, ps)
+	start, end, ok := parseTimeRange(c)
+	if !ok {
+		return
+	}
+	list, total, _ := h.logSvc.ListLoginLogs(c.Request.Context(), LoginLogQuery{
+		Username:  c.Query("username"),
+		IP:        c.Query("ip"),
+		Success:   queryInt8Ptr(c, "success"),
+		StartTime: start,
+		EndTime:   end,
+		Sort:      c.Query("sort"),
+		Order:     c.Query("order"),
+		Page:      page,
+		PageSize:  ps,
+	})
 	response.OK(c, h.enc.Page(list, total, page, ps))
+}
+
+// --- 查询参数辅助 ---
+
+// queryInt8Ptr 读取可选 int8 查询参数；缺省/非法返回 nil（不参与过滤）。
+func queryInt8Ptr(c *gin.Context, key string) *int8 {
+	raw := c.Query(key)
+	if raw == "" {
+		return nil
+	}
+	n, err := strconv.ParseInt(raw, 10, 8)
+	if err != nil {
+		return nil
+	}
+	v := int8(n)
+	return &v
+}
+
+// parseTimeRange 解析 start_time/end_time 查询参数并校验区间。
+// 解析失败或 start>end → 写 400 并返回 ok=false（不静默吞）。end 为纯日期时补到当日末。
+func parseTimeRange(c *gin.Context) (start, end *time.Time, ok bool) {
+	start, err := parseTimeParam(c.Query("start_time"), false)
+	if err != nil {
+		response.BadReq(c)
+		return nil, nil, false
+	}
+	end, err = parseTimeParam(c.Query("end_time"), true)
+	if err != nil {
+		response.BadReq(c)
+		return nil, nil, false
+	}
+	if start != nil && end != nil && start.After(*end) {
+		response.BadReq(c)
+		return nil, nil, false
+	}
+	return start, end, true
 }
 
 func (h *Handler) CleanLoginLogs(c *gin.Context) {

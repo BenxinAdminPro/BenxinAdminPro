@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 01:20:00
+// | @updated   2026-06-14 10:48:00  T-005b-4：列表补文件名/上传人用户名模糊 + 排序 + uploader 可读化
 // +----------------------------------------------------------------------
 
 package system
@@ -111,20 +112,62 @@ func (s *FileService) Download(ctx context.Context, id uint64) (*SysFile, io.Rea
 	return &file, reader, nil
 }
 
-// List 文件分页列表。
-func (s *FileService) List(ctx context.Context, uploader string, page, pageSize int) ([]SysFile, int64, error) {
-	if page <= 0 { page = 1 }
-	if pageSize <= 0 || pageSize > 100 { pageSize = 20 }
+// FileListQuery 文件列表查询参数。
+type FileListQuery struct {
+	UploaderName string // 按上传人用户名模糊（uploader 存内部 ID，先映射 username→ID 集）
+	OriginalName string // 文件名模糊
+	Sort         string
+	Order        string
+	Page         int
+	PageSize     int
+}
 
+func (q *FileListQuery) normalize() {
+	if q.Page <= 0 { q.Page = 1 }
+	if q.PageSize <= 0 || q.PageSize > 100 { q.PageSize = 20 }
+}
+
+var fileSortable = map[string]string{"created_at": "created_at", "size": "size", "id": "id"}
+
+// List 文件分页列表（T-005b-4：补文件名/上传人用户名模糊 + 排序 + uploader 可读化）。
+func (s *FileService) List(ctx context.Context, q FileListQuery) ([]SysFile, int64, error) {
+	q.normalize()
 	query := s.db.WithContext(ctx).Model(&SysFile{})
-	if uploader != "" {
-		query = query.Where("uploader = ?", uploader)
+	if q.UploaderName != "" {
+		ids := userIDsByName(ctx, s.db, q.UploaderName)
+		if len(ids) == 0 {
+			query = query.Where("1 = 0") // 无任何用户名匹配 → 空结果
+		} else {
+			query = query.Where("uploader IN ?", ids)
+		}
+	}
+	if q.OriginalName != "" {
+		query = query.Where("original_name LIKE ?", likePattern(q.OriginalName))
 	}
 	var total int64
 	query.Count(&total)
 	var list []SysFile
-	query.Offset((page-1)*pageSize).Limit(pageSize).Order("id DESC").Find(&list)
+	query = applySort(query, q.Sort, q.Order, fileSortable, "id DESC")
+	query.Offset((q.Page-1)*q.PageSize).Limit(q.PageSize).Find(&list)
+	s.fillUploaderNames(ctx, list)
 	return list, total, nil
+}
+
+// fillUploaderNames 批量解析本页 uploader 内部 ID → 用户名展示（一次查询）。
+func (s *FileService) fillUploaderNames(ctx context.Context, list []SysFile) {
+	if len(list) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(list))
+	for i := range list {
+		if list[i].Uploader != "" {
+			ids = append(ids, list[i].Uploader)
+		}
+	}
+	names := resolveUserNames(ctx, s.db, ids)
+	for i := range list {
+		list[i].UploaderName = displayUserName(list[i].Uploader, names)
+	}
 }
 
 // Delete 软删除文件 + 标记待物理清理。

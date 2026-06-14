@@ -54,11 +54,11 @@ export function removeDictType(id: string) {
 // ---- 字典数据 ----
 
 /**
- * 字典数据列表 — 后端按 dict_type 过滤返回全量数组（无分页包络/无分页参数），
- * 由页面适配层包装为分页结构。禁止以空 dict_type 调用（未选类型时页面不发请求）。
+ * 字典数据列表 — T-005b-4 起后端真分页，返回标准分页包络 {list,total,page,page_size}。
+ * params 须含 dict_type（选中类型）+ page/page_size。禁止以空 dict_type 调用（未选类型时页面不发请求）。
  */
-export function listDictData(dictType: string) {
-  return http.get<DictDataRow[]>('/sys/dict/data', { params: { dict_type: dictType } })
+export function listDictData(params: Record<string, unknown>) {
+  return http.get<PageResult<DictDataRow>>('/sys/dict/data', { params })
 }
 
 export function createDictData(data: Record<string, unknown>) {

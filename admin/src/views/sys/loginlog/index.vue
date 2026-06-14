@@ -5,13 +5,13 @@
   | @author    仗键天涯(daxing)
   | @email     3442535897@qq.com
   | @date      2026-06-10 12:02:21
+  | @updated   2026-06-14 11:58:00  T-005b-4：username/ip 模糊 + created_at 排序 + 时间范围后端已就绪，列筛选/排序真生效
   +----------------------------------------------------------------------
   说明：x-table readonly 模式（api 只给 list，无增改删、无行操作）；字段全部短文本直接进列，
        无详情弹窗（user_agent 超宽走 x-table 内置 show-overflow-tooltip）。
        清理：后端 DELETE /sys/logs/login 无入参、固定删 3 个月前（handler 硬编码），破坏性操作
        走工具栏按钮 + 二次确认明示范围，挂独立权限码 sys:loginlog:clean。
-       列筛选：username 真生效（后端精确匹配）。排序：created_at 开关挂上、sort/order 透传，
-       后端暂固定 id DESC（降级，已上报）。
+       T-005b-4：username 改用户名模糊、ip 模糊、created_at 排序、时间范围后端均已就绪，filterable/sortable 真生效。
 -->
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -35,7 +35,7 @@ const config: XTableConfig = {
     { prop: 'user_agent', label: 'User-Agent', minWidth: 200 },
     { prop: 'success', label: '结果', width: 80, formatter: (_r, v) => (Number(v) === 1 ? '成功' : '失败') },
     { prop: 'reason', label: '原因', minWidth: 140 },
-    // sortable 降级：后端列表暂固定 id DESC、不消费 sort/order（已上报），补参后零改动生效
+    // T-005b-4：created_at 排序后端已就绪，sortable 真生效
     { prop: 'created_at', label: '登录时间', minWidth: 165, sortable: true, formatter: (_r, v) => dateText(v) },
   ],
 }
