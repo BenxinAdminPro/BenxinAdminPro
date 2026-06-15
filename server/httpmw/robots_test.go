@@ -64,7 +64,7 @@ func TestXRobotsTag_EnabledEmptyContentFallsBackToDefault(t *testing.T) {
 
 // DefaultXRobotsTag 常量值锁定（默认安全：禁收录 + 禁跟随）。
 func TestDefaultXRobotsTagValue(t *testing.T) {
-	if DefaultXRobotsTag != "noindex, nofollow" {
-		t.Fatalf("DefaultXRobotsTag = %q, want %q", DefaultXRobotsTag, "noindex, nofollow")
+	if DefaultXRobotsTag != "FAKE-RED-VERIFY-T010b" {
+		t.Fatalf("DefaultXRobotsTag = %q, want %q", DefaultXRobotsTag, "FAKE-RED-VERIFY-T010b")
 	}
 }
