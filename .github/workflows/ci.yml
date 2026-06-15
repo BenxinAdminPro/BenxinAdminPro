@@ -1,0 +1,100 @@
+# CI quality gate for BenxinAdminPro server (Go).
+# Runs on push/PR to main: build + vet + default test gate + integration test gate.
+# The integration gate connects to MySQL/Redis service containers via BENXIN_TEST_* env.
+# Note: this is a machine-read CI config (not source code), so the project 5-line
+# header-comment convention does not apply here. Comments kept pure ASCII on purpose.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: build + vet + test (default + integration)
+    runs-on: ubuntu-latest
+
+    # Service containers mirror deploy/docker-compose.dev.yml (mysql:8.0 + valkey:8).
+    # Credentials below are throwaway dev-only service-container creds, not production.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: benxinadminpro
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      valkey:
+        image: valkey/valkey:8
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="valkey-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    # Integration tests read these via internal/testsupport. Use explicit 127.0.0.1
+    # (NOT localhost) so the runner never resolves to IPv6 ::1 while the service
+    # container only binds IPv4. DSN body matches testsupport.DefaultMySQLDSN verbatim
+    # except host is 127.0.0.1.
+    env:
+      BENXIN_TEST_MYSQL_DSN: "root:root@tcp(127.0.0.1:3306)/benxinadminpro?charset=utf8mb4&parseTime=true&loc=Local"
+      BENXIN_TEST_REDIS_ADDR: "127.0.0.1:6379"
+
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          # Pin the Go version straight from go.mod (the 'go' directive) - no hardcoded value.
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet (default)
+        run: go vet ./...
+
+      - name: Vet (integration tag)
+        run: go vet -tags=integration ./...
+
+      # Belt-and-suspenders: the service healthcheck gates the job, but mysqladmin ping
+      # can go green before the root user / database are fully ready for auth'd connects.
+      # Poll the real auth path the tests use before running the integration gate.
+      - name: Wait for MySQL ready
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -proot --silent; then
+              echo "MySQL is ready"
+              exit 0
+            fi
+            echo "Waiting for MySQL... ($i/30)"
+            sleep 2
+          done
+          echo "MySQL did not become ready in time"
+          exit 1
+
+      - name: Test (default gate)
+        run: go test ./... -count=1
+
+      - name: Test (integration gate)
+        run: go test -tags=integration ./... -count=1
