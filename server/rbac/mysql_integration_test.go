@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 15:36:00
+// | @updated   2026-06-15 19:16:47  T-003d-fix：RoleInheritance 陈旧 URL 断言重写为 perm code + 同主体负向对照
 // +----------------------------------------------------------------------
 //
 // 运行方式：go test -tags=integration ./rbac/... -v -count=1
@@ -115,6 +116,21 @@ func TestNewEnforcerMySQL(t *testing.T) {
 	}
 }
 
+// TestNewEnforcerMySQL_RoleInheritance 验证 g 角色继承在真实 MySQL + gorm-adapter
+// 持久化路径上确实生效。
+//
+// T-003d-fix（HEAD dacc8a1）：原断言用 URL/keyMatch 形态（p.obj=/api/admin/*、
+// Enforce obj=/api/admin/users），自 T-003b 把 model.conf 由 keyMatch2 改为
+// perm code 精确匹配（r.obj == p.obj，见 spec/rbac/model.conf）后即恒红——
+// 这是陈旧断言而非鉴权 bug。本次重写为 perm code 形态，并镜像
+// rbac_test.go:TestEnforcerRoleInheritance 的 (sub,obj,act) 元组（仅适配器不同：
+// 那条走 file adapter，本条走真 MySQL），两者平行便于对照。
+//
+// 命门=同主体负向对照：alice 本身不持任何直挂 p 规则（admin 才持），故
+// allow 必然由 g 继承链承载。先证无链 deny、加链后 allow 真翻转——将来若有人
+// 给 alice 误加直挂策略、或 g 在 gorm-adapter 持久化路径回归，本测试会真红
+// 而非平凡变绿。setupMySQL 每条用例 DROP+重建 inttest_casbin_rule，table 全新、
+// 不污染其它集成测试。
 func TestNewEnforcerMySQL_RoleInheritance(t *testing.T) {
 	db := setupMySQL(t)
 
@@ -123,15 +139,35 @@ func TestNewEnforcerMySQL_RoleInheritance(t *testing.T) {
 		t.Fatalf("NewEnforcer: %v", err)
 	}
 
-	_, _ = e.AddPolicy("admin", "/api/admin/*", "*")
-	_, _ = e.AddGroupingPolicy("alice", "admin")
+	// admin 角色持 p 规则；alice 无直挂策略。
+	_, _ = e.AddPolicy("admin", "sys:user:list", "access")
 
-	allowed, _ := e.Enforce("alice", "/api/admin/users", "POST")
-	if !allowed {
-		t.Error("alice should inherit admin role permissions")
+	// 负向对照（前态）：未建 g(alice,admin) 时 alice 应被拒——
+	// 坐实后续 allow 来自继承而非任何直挂策略。
+	allowed, _ := e.Enforce("alice", "sys:user:list", "access")
+	if allowed {
+		t.Error("alice should be denied before grouping policy (allow must come from inheritance, not a direct policy)")
 	}
 
-	allowed, _ = e.Enforce("bob", "/api/admin/users", "GET")
+	// 建立继承链 alice → admin。
+	_, _ = e.AddGroupingPolicy("alice", "admin")
+
+	// 后态：加链后翻转为 allow——g 角色继承在真实 MySQL+gorm-adapter 路径生效。
+	allowed, _ = e.Enforce("alice", "sys:user:list", "access")
+	if !allowed {
+		t.Error("alice should inherit admin role permissions after grouping policy added")
+	}
+
+	// act 通配维度（保留原测试 p.act="*" 覆盖，不静默丢失）：
+	// admin 另持一条 act=* 的 perm，alice 经继承应对任意 act 命中。
+	_, _ = e.AddPolicy("admin", "sys:user:create", "*")
+	allowed, _ = e.Enforce("alice", "sys:user:create", "anyact")
+	if !allowed {
+		t.Error("alice should inherit admin's wildcard-act permission (act=* path)")
+	}
+
+	// bob 基线：无角色始终拒绝。
+	allowed, _ = e.Enforce("bob", "sys:user:list", "access")
 	if allowed {
 		t.Error("bob should be denied without role")
 	}
