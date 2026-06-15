@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:00:00
 // | @updated   2026-06-08 03:06:00
+// | @updated   2026-06-15 17:43:54  T-009b：新增 ErrInvalidParentMenu（offset 47，菜单专属父节点错误码，段尾纯追加）
 // +----------------------------------------------------------------------
 
 package errcode
@@ -49,6 +50,7 @@ const (
 	OffsetRoleInUse         = 44
 	OffsetInvalidID         = 45
 	OffsetPermCodeExists    = 46
+	OffsetInvalidParentMenu = 47 // T-009b：菜单专属父节点错误码（段尾纯追加，不复用 dept 的 35）
 
 	// T-003c 数据权限错误码 offset（50~59 段）
 	OffsetInvalidDataScope = 50
@@ -104,6 +106,7 @@ var httpStatus = map[int]int{
 	OffsetRoleInUse:             409,
 	OffsetInvalidID:             400,
 	OffsetPermCodeExists:        409,
+	OffsetInvalidParentMenu:     400,
 	OffsetInvalidDataScope:      400,
 	OffsetDictTypeExists:       409,
 	OffsetDictTypeNotFound:     404,
@@ -147,6 +150,7 @@ var i18nKeys = map[int]string{
 	OffsetRoleInUse:             "sys.role_in_use",
 	OffsetInvalidID:             "sys.invalid_id",
 	OffsetPermCodeExists:        "sys.perm_code_exists",
+	OffsetInvalidParentMenu:     "sys.invalid_parent_menu",
 	OffsetInvalidDataScope:      "sys.invalid_data_scope",
 	OffsetDictTypeExists:       "sys.dict_type_exists",
 	OffsetDictTypeNotFound:     "sys.dict_type_not_found",
@@ -221,6 +225,7 @@ type Registry struct {
 	ErrRoleInUse         Error
 	ErrInvalidID         Error
 	ErrPermCodeExists    Error
+	ErrInvalidParentMenu Error
 
 	// T-003c 数据权限
 	ErrInvalidDataScope Error
@@ -278,6 +283,7 @@ func NewRegistry(segmentBase int) (*Registry, error) {
 		ErrRoleInUse:             newErr(segmentBase, OffsetRoleInUse),
 		ErrInvalidID:             newErr(segmentBase, OffsetInvalidID),
 		ErrPermCodeExists:        newErr(segmentBase, OffsetPermCodeExists),
+		ErrInvalidParentMenu:     newErr(segmentBase, OffsetInvalidParentMenu),
 		ErrInvalidDataScope:     newErr(segmentBase, OffsetInvalidDataScope),
 		ErrDictTypeExists:      newErr(segmentBase, OffsetDictTypeExists),
 		ErrDictTypeNotFound:    newErr(segmentBase, OffsetDictTypeNotFound),
@@ -321,6 +327,7 @@ func (r *Registry) allOffsets() [][2]int {
 		OffsetDeptHasUsers, OffsetPostCodeExists, OffsetInvalidParentDept,
 		OffsetRoleCodeExists, OffsetMenuPermRequired, OffsetMenuPermForbidden,
 		OffsetMenuHasChildren, OffsetRoleInUse, OffsetInvalidID, OffsetPermCodeExists,
+		OffsetInvalidParentMenu,
 		OffsetInvalidDataScope,
 		OffsetDictTypeExists, OffsetDictTypeNotFound,
 		OffsetConfigKeyExists, OffsetConfigNotFound,
@@ -346,6 +353,7 @@ func (r *Registry) allErrors() []Error {
 		r.ErrDeptHasUsers, r.ErrPostCodeExists, r.ErrInvalidParentDept,
 		r.ErrRoleCodeExists, r.ErrMenuPermRequired, r.ErrMenuPermForbidden,
 		r.ErrMenuHasChildren, r.ErrRoleInUse, r.ErrInvalidID, r.ErrPermCodeExists,
+		r.ErrInvalidParentMenu,
 		r.ErrInvalidDataScope,
 		r.ErrDictTypeExists, r.ErrDictTypeNotFound,
 		r.ErrConfigKeyExists, r.ErrConfigNotFound,

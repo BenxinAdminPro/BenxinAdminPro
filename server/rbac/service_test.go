@@ -508,6 +508,138 @@ func TestPasswordHashNotInJSON_Create(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// T-009b：SetStatus 三态 + 菜单父节点专属错误码
+// ---------------------------------------------------------------------------
+
+// codeOf 从已编码错误提取 code（service 层返回的 errcode.Error 实现 GetCode()）。
+func codeOf(t *testing.T, err error) int {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected coded error, got nil")
+	}
+	c, ok := err.(interface{ GetCode() int })
+	if !ok {
+		t.Fatalf("not a coded error: %v", err)
+	}
+	return c.GetCode()
+}
+
+// TestUserSetStatusNotFound 关键负例：不存在的 id 仍须返 ErrUserNotFound——
+// T-009b 修复区分"无变更"vs"不存在"，绝不放宽存在性校验（否则安全/正确性倒退）。
+func TestUserSetStatusNotFound(t *testing.T) {
+	db := setupTestDB(t)
+	reg := testReg(t)
+	hasher, _ := auth.NewPasswordHasher(testArgon2Params)
+	svc := NewUserService(db, hasher, reg)
+	ctx := context.Background()
+
+	err := svc.SetStatus(ctx, 999999, 1)
+	if got := codeOf(t, err); got != reg.ErrUserNotFound.Code {
+		t.Errorf("SetStatus on missing id: code got %d, want ErrUserNotFound(%d)", got, reg.ErrUserNotFound.Code)
+	}
+}
+
+// TestUserSetStatusRealChange 真变更 → 成功且落值。
+func TestUserSetStatusRealChange(t *testing.T) {
+	db := setupTestDB(t)
+	reg := testReg(t)
+	hasher, _ := auth.NewPasswordHasher(testArgon2Params)
+	svc := NewUserService(db, hasher, reg)
+	ctx := context.Background()
+
+	user, _ := svc.Create(ctx, CreateUserInput{Username: "stchg", Password: "p"})
+	if err := svc.SetStatus(ctx, user.ID, 1); err != nil {
+		t.Fatalf("SetStatus real change: %v", err)
+	}
+	u, _ := svc.Get(ctx, user.ID)
+	if u.Status != 1 {
+		t.Errorf("status: got %d, want 1", u.Status)
+	}
+}
+
+// TestUserSetStatusSameValueIdempotent 同值（记录存在但值未变）→ 须返成功，不误返 404。
+// 注：SQLite 同值 UPDATE 返 RowsAffected==1，故本用例在 SQLite 上即便旧实现也过；
+// 真正区分（MySQL 同值返 RowsAffected==0、旧实现误返 404）的命门由
+// org_integration_test.go:TestOrgSetStatusSameValue_MySQL（-tags=integration）坐实。
+func TestUserSetStatusSameValueIdempotent(t *testing.T) {
+	db := setupTestDB(t)
+	reg := testReg(t)
+	hasher, _ := auth.NewPasswordHasher(testArgon2Params)
+	svc := NewUserService(db, hasher, reg)
+	ctx := context.Background()
+
+	user, _ := svc.Create(ctx, CreateUserInput{Username: "stsame", Password: "p"})
+	if err := svc.SetStatus(ctx, user.ID, 1); err != nil {
+		t.Fatalf("SetStatus to 1: %v", err)
+	}
+	// 再设相同值 → 应成功（幂等无变更）
+	if err := svc.SetStatus(ctx, user.ID, 1); err != nil {
+		t.Errorf("SetStatus same value(1→1): got %v, want nil（同值不应误返 404）", err)
+	}
+	u, _ := svc.Get(ctx, user.ID)
+	if u.Status != 1 {
+		t.Errorf("status after same-value set: got %d, want 1", u.Status)
+	}
+}
+
+// setupMenuTestDB 在通用测试库基础上补 SysMenu 表。
+func setupMenuTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db := setupTestDB(t)
+	if err := db.AutoMigrate(&SysMenu{}); err != nil {
+		t.Fatalf("auto migrate menu: %v", err)
+	}
+	return db
+}
+
+// TestMenuParentUsesMenuErrorCode 菜单父节点错误改用专属 ErrInvalidParentMenu，
+// 不再复用 ErrInvalidParentDept（"父部门"文案出现在菜单模块=语义错）。
+func TestMenuParentUsesMenuErrorCode(t *testing.T) {
+	db := setupMenuTestDB(t)
+	reg := testReg(t)
+	svc := NewMenuService(db, reg)
+	ctx := context.Background()
+
+	root, err := svc.Create(ctx, CreateMenuInput{MenuType: MenuTypeDir, Name: "系统管理"})
+	if err != nil {
+		t.Fatalf("create root: %v", err)
+	}
+	child, err := svc.Create(ctx, CreateMenuInput{ParentID: root.ID, MenuType: MenuTypePage, Name: "用户管理"})
+	if err != nil {
+		t.Fatalf("create child: %v", err)
+	}
+
+	wantMenu := reg.ErrInvalidParentMenu.Code
+	notDept := reg.ErrInvalidParentDept.Code
+	if wantMenu == notDept {
+		t.Fatalf("菜单专属码与部门码相同(%d)——未真正分离", wantMenu)
+	}
+
+	check := func(label string, err error) {
+		got := codeOf(t, err)
+		if got == notDept {
+			t.Errorf("%s: 仍返 ErrInvalidParentDept(%d)，未改用菜单专属码", label, notDept)
+		}
+		if got != wantMenu {
+			t.Errorf("%s: code got %d, want ErrInvalidParentMenu(%d)", label, got, wantMenu)
+		}
+	}
+
+	// ① Create 父不存在
+	_, err = svc.Create(ctx, CreateMenuInput{ParentID: 999999, MenuType: MenuTypePage, Name: "孤儿"})
+	check("create-missing-parent", err)
+
+	// ② Update 移动到不存在父
+	missing := uint64(999999)
+	err = svc.Update(ctx, child.ID, UpdateMenuInput{ParentID: &missing, MenuType: MenuTypePage, Name: "用户管理"})
+	check("update-missing-parent", err)
+
+	// ③ Update 移动成环（root 移到其子孙 child 之下）
+	err = svc.Update(ctx, root.ID, UpdateMenuInput{ParentID: &child.ID, MenuType: MenuTypeDir, Name: "系统管理"})
+	check("update-cycle", err)
+}
+
+// ---------------------------------------------------------------------------
 // 辅助
 // ---------------------------------------------------------------------------
 

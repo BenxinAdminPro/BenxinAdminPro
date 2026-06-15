@@ -188,3 +188,50 @@ func TestOrgSpecSQLNoAutoMigrate_MySQL(t *testing.T) {
 		}
 	}
 }
+
+// TestOrgSetStatusSameValue_MySQL T-009b 命门：在真实 MySQL 上坐实 SetStatus 三态。
+// SQLite 同值 UPDATE 返 RowsAffected==1（无法暴露缺陷），唯有 MySQL（默认不带
+// CLIENT_FOUND_ROWS）同值返 RowsAffected==0——旧实现据此误返 404。本测试三态断言：
+// ① 同值 → 成功（不 404，修复核心）② 不存在 id → 仍 ErrUserNotFound（存在性未放宽，关键负例）
+// ③ 真变更 → 成功且落值。
+func TestOrgSetStatusSameValue_MySQL(t *testing.T) {
+	db := setupOrgMySQL(t)
+	reg, _ := errcode.NewRegistry(11000)
+	hasher, _ := auth.NewPasswordHasher(auth.Argon2idParams{
+		MemoryKiB: 1024, Iterations: 1, Parallelism: 1, SaltLen: 16, KeyLen: 32,
+	})
+	svc := NewUserService(db, hasher, reg)
+	ctx := context.Background()
+
+	user, err := svc.Create(ctx, CreateUserInput{Username: "st_same", Password: "p"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	// 先把 status 设到已知值 1，建立"已是该值"前提
+	if err := svc.SetStatus(ctx, user.ID, 1); err != nil {
+		t.Fatalf("SetStatus to 1: %v", err)
+	}
+
+	// ① 同值（1→1）→ MySQL RowsAffected==0，修复后须返成功（旧实现在此误返 404）
+	if err := svc.SetStatus(ctx, user.ID, 1); err != nil {
+		t.Errorf("SetStatus same value(1→1): got %v, want nil（MySQL 同值误返 404 缺陷未修）", err)
+	}
+
+	// ② 不存在 id → 仍 ErrUserNotFound（关键负例：存在性校验未放宽）
+	err = svc.SetStatus(ctx, 99999999, 1)
+	if err == nil {
+		t.Fatal("SetStatus on missing id: expected ErrUserNotFound, got nil（存在性被放宽=安全倒退）")
+	}
+	if c, ok := err.(interface{ GetCode() int }); !ok || c.GetCode() != reg.ErrUserNotFound.Code {
+		t.Errorf("SetStatus missing id: got %v, want ErrUserNotFound(%d)", err, reg.ErrUserNotFound.Code)
+	}
+
+	// ③ 真变更（1→0）→ 成功且落值
+	if err := svc.SetStatus(ctx, user.ID, 0); err != nil {
+		t.Errorf("SetStatus real change(1→0): %v", err)
+	}
+	got, _ := svc.Get(ctx, user.ID)
+	if got.Status != 0 {
+		t.Errorf("status after change: got %d, want 0", got.Status)
+	}
+}

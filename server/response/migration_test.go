@@ -55,6 +55,7 @@ var expectedCodes = []struct {
 	{11044, 409, "sys.role_in_use"},
 	{11045, 400, "sys.invalid_id"},
 	{11046, 409, "sys.perm_code_exists"},
+	{11047, 400, "sys.invalid_parent_menu"}, // T-009b：菜单专属父节点错误码（段尾纯追加）
 
 	// T-003c 数据权限 (offset 50)
 	{11050, 400, "sys.invalid_data_scope"},

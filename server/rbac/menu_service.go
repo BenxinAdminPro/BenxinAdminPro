@@ -6,6 +6,7 @@
 // | @date      2026-06-07 21:12:00
 // | @updated   2026-06-09 10:40:13  T-003e：parent_id 降级 json:"-"（由 handler 解码注入）
 // | @updated   2026-06-13 15:30:00  T-005b-1：菜单 CUD 接 Casbin policy 重载联动（改/删 F 节点权限即时收回）
+// | @updated   2026-06-15 17:43:54  T-009b：父节点错误由复用 ErrInvalidParentDept 改用菜单专属 ErrInvalidParentMenu
 // +----------------------------------------------------------------------
 
 package rbac
@@ -99,7 +100,7 @@ func (s *MenuService) Create(ctx context.Context, in CreateMenuInput) (*SysMenu,
 	if in.ParentID > 0 {
 		parent, err := s.getByID(ctx, in.ParentID)
 		if err != nil {
-			return nil, s.errs.ErrInvalidParentDept
+			return nil, s.errs.ErrInvalidParentMenu
 		}
 		ancestors = parent.Ancestors + "," + strconv.FormatUint(parent.ID, 10)
 	}
@@ -153,12 +154,12 @@ func (s *MenuService) Update(ctx context.Context, id uint64, in UpdateMenuInput)
 				selfStr := strconv.FormatUint(id, 10)
 				var newParent SysMenu
 				if err := tx.First(&newParent, newParentID).Error; err != nil {
-					return s.errs.ErrInvalidParentDept
+					return s.errs.ErrInvalidParentMenu
 				}
 				fullPath := newParent.Ancestors + "," + strconv.FormatUint(newParent.ID, 10)
 				if strings.Contains(fullPath, ","+selfStr+",") ||
 					strings.HasSuffix(fullPath, ","+selfStr) || newParent.ID == id {
-					return s.errs.ErrInvalidParentDept
+					return s.errs.ErrInvalidParentMenu
 				}
 				updates["parent_id"] = newParentID
 				newAncestors := fullPath

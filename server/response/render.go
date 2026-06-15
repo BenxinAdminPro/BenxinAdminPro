@@ -5,6 +5,8 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 00:02:00
 // | @updated   2026-06-08 02:35:00
+// | @updated   2026-06-15 17:43:54  T-009b：补全 file 错误 6 键 + 菜单父节点新键文案（消除返裸 i18n key）
+// | @updated   2026-06-15 18:10:00  T-009b 搭车（PM 裁定 A）：补 config 中心 2 键文案（config_decrypt_failed/migration_failed）
 // +----------------------------------------------------------------------
 
 package response
@@ -45,11 +47,22 @@ var defaultMessages = map[string]string{
 	"sys.role_in_use":           "角色仍在使用中",
 	"sys.invalid_id":            "无效的 ID",
 	"sys.perm_code_exists":      "权限码已存在",
+	"sys.invalid_parent_menu":   "无效的父菜单", // T-009b：菜单专属父节点（区别于父部门）
 	"sys.invalid_data_scope":    "无效的数据权限范围",
 	"sys.dict_type_exists":      "字典类型已存在",
 	"sys.dict_type_not_found":   "字典类型不存在",
 	"sys.config_key_exists":     "参数键已存在",
 	"sys.config_not_found":      "参数不存在",
+	// T-009b：补全 file 错误 6 键文案（此前缺失→经渲染层返裸 i18n key，见 T-007f §8-2）
+	"sys.file_too_large":        "文件大小超出限制",
+	"sys.file_ext_not_allowed":  "文件扩展名不允许",
+	"sys.file_type_mismatch":    "文件类型与扩展名不匹配",
+	"sys.file_not_found":        "文件不存在",
+	"sys.file_name_invalid":     "无效的文件名",
+	"sys.storage_failed":        "存储操作失败",
+	// T-009b 搭车（PM 裁定 A）：补 config 中心 2 键文案（此前缺失→返裸 key，与 file 6 键同类）
+	"sys.config_decrypt_failed": "参数解密失败",
+	"sys.migration_failed":      "数据库迁移失败",
 }
 
 // MessageFunc 自定义消息查找函数。

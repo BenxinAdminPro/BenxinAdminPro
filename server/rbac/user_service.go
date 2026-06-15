@@ -9,6 +9,7 @@
 // | @updated   2026-06-09 17:00:00  T-004e：唯一键冲突(1062)兜底转 ErrUsernameExists（软删/竞态防 500）
 // | @updated   2026-06-14 15:30:00  T-008b：Get 预载已授角色（分配角色弹窗回填全量 role_ids 来源）
 // | @updated   2026-06-14 16:40:00  T-008b 增量：List 批量回填 Roles（列表角色列，固定 2 查询非 N+1）
+// | @updated   2026-06-15 17:43:54  T-009b：SetStatus 同值修复（RowsAffected==0 探测存在性区分"无变更"vs"不存在"，不再误返 404）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -330,13 +331,28 @@ func (s *UserService) ResetPassword(ctx context.Context, id uint64, newPassword 
 }
 
 // SetStatus 启用/禁用用户。
+//
+// T-009b 修复：RowsAffected==0 不可直接判 404。MySQL 默认不带 CLIENT_FOUND_ROWS，
+// 当 status 已是目标值（无变更）时同值 UPDATE 返回 0 改动行——与"记录不存在"同形。
+// 旧实现一刀切返 ErrUserNotFound，使 API 直调 PUT /:id/status 传当前相同值误返 404
+// （toggleStatus 永远翻转值故不触发，但直调会撞）。修法：RowsAffected==0 时显式
+// 探测存在性——记录存在=幂等无变更返成功；记录不存在才返 NotFound。
+// 安全/正确性：存在性校验不放宽——Count 走 Model(&SysUser{}) 带 GORM 软删 scope，
+// 软删/不存在的 id 仍正确返 404，绝不一刀切返成功。
 func (s *UserService) SetStatus(ctx context.Context, id uint64, status int8) error {
 	result := s.db.WithContext(ctx).Model(&SysUser{}).Where("id = ?", id).Update("status", status)
 	if result.Error != nil {
 		return fmt.Errorf("rbac: set status: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return s.errs.ErrUserNotFound
+		var count int64
+		if err := s.db.WithContext(ctx).Model(&SysUser{}).Where("id = ?", id).Count(&count).Error; err != nil {
+			return fmt.Errorf("rbac: set status existence check: %w", err)
+		}
+		if count == 0 {
+			return s.errs.ErrUserNotFound
+		}
+		// 记录存在但值未变：幂等无变更，视为成功（不返 404）。
 	}
 	return nil
 }
