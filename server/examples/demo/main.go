@@ -7,6 +7,7 @@
 // | @updated   2026-06-08 12:00:00  抽出 buildApp 供 e2e 集成测试；密钥/装配错误改返回 error
 // | @updated   2026-06-13 15:30:00  T-005b-1：menuSvc 注入 policySync（菜单 CUD 联动 policy 重载）
 // | @updated   2026-06-15 10:30:00  T-005b-3：configSvc 注入 gcmKey + seed 传 gcmKey（加密参数写链路）
+// | @updated   2026-06-15 14:30:00  T-009a：全局注入 X-Robots-Tag 禁收录中间件 + security 配置段（默认安全 SetDefault）
 // +----------------------------------------------------------------------
 
 package main
@@ -31,6 +32,7 @@ import (
 	"github.com/benxin_dev/benxinadminpro-server/crypto"
 	"github.com/benxin_dev/benxinadminpro-server/drivers/storage"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/httpmw"
 	"github.com/benxin_dev/benxinadminpro-server/idcodec"
 	"github.com/benxin_dev/benxinadminpro-server/rbac"
 	"github.com/benxin_dev/benxinadminpro-server/response"
@@ -236,6 +238,8 @@ func buildApp(cfg demoConfig, db *gorm.DB, rdb *redis.Client) (*demoApp, error) 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	// T-009a：全局注入 X-Robots-Tag 禁搜索引擎收录（参数化权威控制点，默认开+noindex,nofollow）
+	r.Use(httpmw.XRobotsTag(httpmw.RobotsConfig{Enabled: cfg.XRobotsEnabled, Content: cfg.XRobotsContent}))
 
 	// 公共路由（无鉴权）
 	auth.NewHandler(authSvc, ecReg).RegisterRoutes(&r.RouterGroup)
@@ -352,6 +356,9 @@ type demoConfig struct {
 	RedisAddr     string
 	RedisDB       int
 	RedisPassword string
+	// T-009a 禁搜索引擎收录：默认安全（缺省 = 开 + noindex,nofollow，靠 loadConfig 的 SetDefault 保证）
+	XRobotsEnabled bool
+	XRobotsContent string
 }
 
 func loadConfig() demoConfig {
@@ -364,6 +371,11 @@ func loadConfig() demoConfig {
 	// 嵌套键 a.b.c → 环境变量 DEMO_A_B_C（使「来自环境变量」对所有键真正生效）
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+
+	// T-009a 默认安全：配置缺省（未声明）即走「禁收录开 + noindex,nofollow」，
+	// 不可因 key 未声明而静默放开收录（viper GetBool 缺省返 false=不安全，故 SetDefault 兜底）。
+	v.SetDefault("security.x_robots_tag.enabled", true)
+	v.SetDefault("security.x_robots_tag.content", httpmw.DefaultXRobotsTag)
 
 	if err := v.ReadInConfig(); err != nil {
 		log.Fatalf("read config: %v (copy config.example.yaml to config.local.yaml)", err)
@@ -406,6 +418,9 @@ func loadConfig() demoConfig {
 		RedisAddr:     v.GetString("redis.addr"),
 		RedisDB:       v.GetInt("redis.db"),
 		RedisPassword: v.GetString("redis.password"),
+		// T-009a：默认安全经上方 SetDefault 保证（缺省=开+noindex,nofollow）
+		XRobotsEnabled: v.GetBool("security.x_robots_tag.enabled"),
+		XRobotsContent: v.GetString("security.x_robots_tag.content"),
 	}
 }
 

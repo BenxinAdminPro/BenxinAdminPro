@@ -19,6 +19,13 @@ app:
 errcode:
   security_segment_base: 11000  # 安全模块错误码段基址
 
+# 禁搜索引擎收录（X-Robots-Tag 响应头，部署级开关）。默认安全：缺省即「开 + noindex, nofollow」。
+# 消费方装配须保证配置缺省时 enabled 为 true（viper SetDefault），勿因零值静默放开收录。
+security:
+  x_robots_tag:
+    enabled: true
+    content: "noindex, nofollow"
+
 crypto:
   header_prefix: "X-Ca-"
   aes_key_b64: ""               # openssl rand -base64 32 → 解码须恰好 32 字节

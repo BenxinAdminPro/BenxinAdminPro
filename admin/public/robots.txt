@@ -1,0 +1,3 @@
+# BenxinAdminPro admin - disallow search engine indexing
+User-agent: *
+Disallow: /

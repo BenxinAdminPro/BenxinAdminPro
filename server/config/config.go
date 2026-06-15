@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 14:15:00
+// | @updated   2026-06-15 14:30:00  T-009a：加 SecuritySection（X-Robots-Tag 禁收录，参考结构体保持完整）
 // +----------------------------------------------------------------------
 
 package config
@@ -19,12 +20,26 @@ import (
 // 仅负责 YAML 加载和结构映射，由 main/bootstrap 将字段映射到各包的 Config。
 // crypto/auth/rbac 包不 import 本包。
 type AppConfig struct {
-	App     AppSection     `mapstructure:"app"`
-	Errcode ErrcodeSection `mapstructure:"errcode"`
-	Crypto  CryptoSection  `mapstructure:"crypto"`
-	JWT     JWTSection     `mapstructure:"jwt"`
-	Redis   RedisSection   `mapstructure:"redis"`
-	MySQL   MySQLSection   `mapstructure:"mysql"`
+	App      AppSection      `mapstructure:"app"`
+	Errcode  ErrcodeSection  `mapstructure:"errcode"`
+	Crypto   CryptoSection   `mapstructure:"crypto"`
+	JWT      JWTSection      `mapstructure:"jwt"`
+	Redis    RedisSection    `mapstructure:"redis"`
+	MySQL    MySQLSection    `mapstructure:"mysql"`
+	Security SecuritySection `mapstructure:"security"`
+}
+
+// SecuritySection 安全相关配置（响应头等部署级开关）。
+type SecuritySection struct {
+	XRobotsTag XRobotsTagSection `mapstructure:"x_robots_tag"`
+}
+
+// XRobotsTagSection 禁搜索引擎收录（X-Robots-Tag 响应头）配置。
+// 默认安全：消费方装配时须保证「配置缺省 → Enabled=true」（如 viper SetDefault），
+// 不可因 mapstructure 零值（false）静默放开收录——参见 examples/demo loadConfig。
+type XRobotsTagSection struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Content string `mapstructure:"content"`
 }
 
 // AppSection 应用级配置。

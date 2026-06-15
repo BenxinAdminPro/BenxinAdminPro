@@ -18,6 +18,14 @@ app:
 errcode:
   security_segment_base: 11000
 
+# T-009a 禁搜索引擎收录（X-Robots-Tag 响应头，部署级静态配置）。
+# 默认安全：整段省略也走「开 + noindex, nofollow」（main.go SetDefault 兜底）。
+# 私有化部署若需被企业内搜索引擎索引：enabled 设 false（并按部署文档删 admin robots.txt/meta）。
+security:
+  x_robots_tag:
+    enabled: true                 # 缺省即 true（默认禁收录）
+    content: "noindex, nofollow"  # 缺省即此值
+
 crypto:
   header_prefix: "X-Ca-"
   aes_key_b64: ""          # openssl rand -base64 32 → 解码须 32 字节
