@@ -6,6 +6,7 @@
 // | @date      2026-06-08 04:02:00
 // | @updated   2026-06-08 12:00:00  抽出 buildApp 供 e2e 集成测试；密钥/装配错误改返回 error
 // | @updated   2026-06-13 15:30:00  T-005b-1：menuSvc 注入 policySync（菜单 CUD 联动 policy 重载）
+// | @updated   2026-06-15 10:30:00  T-005b-3：configSvc 注入 gcmKey + seed 传 gcmKey（加密参数写链路）
 // +----------------------------------------------------------------------
 
 package main
@@ -179,6 +180,7 @@ func buildApp(cfg demoConfig, db *gorm.DB, rdb *redis.Client) (*demoApp, error) 
 	// ---- system services ----
 	dictSvc := system.NewDictService(db, ecReg)
 	configSvc := system.NewConfigService(db, ecReg)
+	configSvc.SetGCMKey(gcmKey) // T-005b-3：加密参数写链路接入 GCM 主密钥
 	logSvc := system.NewLogService(db)
 	operSink := &system.GormOperLogSink{DB: db}
 
@@ -216,10 +218,16 @@ func buildApp(cfg demoConfig, db *gorm.DB, rdb *redis.Client) (*demoApp, error) 
 			return nil, fmt.Errorf("assembly self-check: %s is nil", name)
 		}
 	}
+	// T-005b-3：加密参数能力就绪检查（gcmKey 非空）。decodeB64(…,32,…) 已 fail-fast，
+	// 此为第二道，显式声明「加密参数写链路就绪」契约（同上 nil 自检范式）。
+	if len(gcmKey) == 0 {
+		subCancel()
+		return nil, fmt.Errorf("assembly self-check: gcm key not ready (encrypted config write disabled)")
+	}
 	slog.Info("assembly self-check passed")
 
 	// ---- 种子数据 ----
-	if err := seed(db, hasher, policySync, cfg); err != nil {
+	if err := seed(db, hasher, policySync, cfg, gcmKey); err != nil {
 		subCancel()
 		return nil, fmt.Errorf("seed: %w", err)
 	}

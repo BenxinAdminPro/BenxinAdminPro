@@ -8,6 +8,7 @@
 // | @updated   2026-06-08 13:00:00  T-003d：删本地"假"requirePerm，RegisterRoutes 注入 PermGuard 真 enforce
 // | @updated   2026-06-09 16:09:17  T-004d：对外 ID hashid 化 — path :id 解码 + 出参 encoder（注入 idcodec hasher）
 // | @updated   2026-06-14 10:52:00  T-005b-4：dict/config/日志列表补查询参数（模糊/时间范围/排序）+ dict_data 真分页
+// | @updated   2026-06-15 10:30:00  T-005b-3：UpdateConfig 改绑 UpdateConfigInput（指针三态值字段）
 // +----------------------------------------------------------------------
 
 package system
@@ -188,7 +189,7 @@ func (h *Handler) CreateConfig(c *gin.Context) {
 func (h *Handler) UpdateConfig(c *gin.Context) {
 	id, err := decodePathID(c, h.hasher, h.errs)
 	if err != nil { return }
-	var in CreateConfigInput
+	var in UpdateConfigInput
 	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
 	if err := h.configSvc.Update(c.Request.Context(), id, in); err != nil { response.ErrResp(c, err); return }
 	response.OK(c, nil)

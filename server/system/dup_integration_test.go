@@ -115,23 +115,10 @@ func TestDupDictTypeSimpleCreate_MySQL(t *testing.T) {
 	assertDupCode(t, err, reg.ErrDictTypeExists.GetCode(), "dict_type 简单重名")
 }
 
-// config Update 改名撞已存在 key → backstop → ErrConfigKeyExists（曾误返 404）。
-func TestDupConfigUpdateRename_MySQL(t *testing.T) {
-	db := setupDupSysMySQL(t)
-	reg, _ := errcode.NewRegistry(11000)
-	svc := NewConfigService(db, reg)
-	ctx := context.Background()
-
-	if _, err := svc.Create(ctx, CreateConfigInput{ConfigKey: "site.name", ConfigValue: "x"}); err != nil {
-		t.Fatalf("create A: %v", err)
-	}
-	b, err := svc.Create(ctx, CreateConfigInput{ConfigKey: "site.logo", ConfigValue: "y"})
-	if err != nil {
-		t.Fatalf("create B: %v", err)
-	}
-	err = svc.Update(ctx, b.ID, CreateConfigInput{ConfigKey: "site.name", ConfigValue: "y"})
-	assertDupCode(t, err, reg.ErrConfigKeyExists.GetCode(), "config update 改名撞键")
-}
+// 注：原 TestDupConfigUpdateRename_MySQL（config Update 改名撞键 → ErrConfigKeyExists）
+// 已随 T-005b-3 移除——UpdateConfigInput 不再含 config_key（编辑态键锁定，禁改，对齐前端
+// disabled），改名场景按设计已不可能，该 backstop 路径对 config 不再可达。Create 侧友好码
+// 仍由 TestDupConfigSimpleCreate_MySQL 覆盖。
 
 // config 简单重名（走预检）也应友好码。
 func TestDupConfigSimpleCreate_MySQL(t *testing.T) {

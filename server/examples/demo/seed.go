@@ -9,6 +9,7 @@
 // | @updated   2026-06-10 12:02:21  T-007e：补操作/登录日志 C 菜单 + F 码（sys:operlog:* / sys:loginlog:*，对齐 handler.go RequirePerm）
 // | @updated   2026-06-10 17:19:28  T-007f：补文件管理 C 菜单 + F 码（sys:file:*，对齐 handler_file.go RequirePerm）
 // | @updated   2026-06-12 14:24:57  T-007h：补岗位管理 C 菜单 + F 码（sys:post:*，对齐 rbac/handler_post.go RequirePerm，B 部分种子最后一块）
+// | @updated   2026-06-15 10:30:00  T-005b-3：搭车补 sys_config 加密样例 + 明文对照（走真 EncryptGCM，免手工 SQL）
 // +----------------------------------------------------------------------
 
 package main
@@ -20,7 +21,9 @@ import (
 	"strings"
 
 	"github.com/benxin_dev/benxinadminpro-server/auth"
+	"github.com/benxin_dev/benxinadminpro-server/crypto"
 	"github.com/benxin_dev/benxinadminpro-server/rbac"
+	"github.com/benxin_dev/benxinadminpro-server/system"
 	"gorm.io/gorm"
 )
 
@@ -34,7 +37,7 @@ func seedPassword(cfg demoConfig, username string) (string, error) {
 	return pwd, nil
 }
 
-func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoConfig) error {
+func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoConfig, gcmKey []byte) error {
 	ctx := context.Background()
 
 	// 全部种子密码来自配置，任一缺失即 fail-fast（零明文默认值）
@@ -197,7 +200,35 @@ func seed(db *gorm.DB, hasher auth.PasswordHasher, ps rbac.PolicySync, cfg demoC
 		ps.ReloadAll(ctx)
 	}
 
+	// ---- 8. 参数样例（T-005b-3：明文对照 + 真加密样例，免手工 SQL）----
+	if err := seedConfig(db, gcmKey); err != nil {
+		return err
+	}
+
 	slog.Info("seed data applied")
+	return nil
+}
+
+// seedConfig 幂等补两条 sys_config：一条明文、一条走真 EncryptGCM 的加密样例。
+// 加密样例给前端验收提供现成 is_encrypted=1 行（列表显 ******、编辑留空保持/重填替换）。
+func seedConfig(db *gorm.DB, gcmKey []byte) error {
+	// 明文对照行
+	plain := system.SysConfig{ConfigKey: "site.title", ConfigValue: "本心通用管理后台", Name: "站点标题", Remark: "明文参数样例", IsEncrypted: 0}
+	db.Where("config_key = ?", plain.ConfigKey).FirstOrCreate(&plain)
+
+	// 加密样例行：仅在不存在时才加密插入（FirstOrCreate 命中则不重新加密，行数幂等稳定）
+	var count int64
+	db.Model(&system.SysConfig{}).Where("config_key = ?", "demo.secret_token").Count(&count)
+	if count == 0 {
+		ciphertext, err := crypto.EncryptGCM(gcmKey, []byte("s3cr3t-demo-token"))
+		if err != nil {
+			return fmt.Errorf("seed encrypted config: %w", err)
+		}
+		enc := system.SysConfig{ConfigKey: "demo.secret_token", ConfigValue: ciphertext, Name: "演示密钥", Remark: "加密参数样例（GCM）", IsEncrypted: 1}
+		if err := db.Create(&enc).Error; err != nil {
+			return fmt.Errorf("seed encrypted config: %w", err)
+		}
+	}
 	return nil
 }
 

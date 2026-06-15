@@ -41,7 +41,12 @@ info:
     v0.12.0: 用户出参加 roles（T-008b）。GET /sys/users/:id（预载）与 GET /sys/users（列表批量回填、
             固定查询非 N+1）均返已授角色（id hashid + code/name）；无角色 omitempty 不输出。
             供「分配角色」弹窗回填 + 列表角色列展示。写路径 PUT /sys/users/:id/roles（hashid 全量覆写）不变。
-  version: "0.13.0"
+    v0.13.0: 角色出参加 menu_ids（T-008c）。GET /sys/roles/:id 预载已授菜单 ID（hashid 数组、详情 only、
+            omitempty），供角色授权树（el-tree check-strictly）回填。写路径 PUT /sys/roles/:id/menus 不变。
+    v0.14.0: 配置加密参数写链路（T-005b-3）。createConfig 入参加 is_encrypted（0/1，=1 走 GCM 加密落库）；
+            updateConfig 编辑态键/类型锁定（不接受 config_key/is_encrypted），config_value 指针三态：
+            省略=保持原值（不破坏密文）、传入=按现有 is_encrypted 加密或明文覆写。列表/详情仍恒脱敏 ******。
+  version: "0.14.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -1153,6 +1158,7 @@ paths:
     post:
       tags: [System]
       summary: 新建参数
+      description: "T-005b-3：is_encrypted=1 时 config_value 经 AES-256-GCM 加密落库（base64(nonce12||ct||tag)），读路径自动解密、列表/详情恒脱敏 ******；=0 明文存。"
       operationId: createConfig
       security: [{ BearerAuth: [] }]
       requestBody:
@@ -1166,6 +1172,12 @@ paths:
                 config_key: { type: string }
                 config_value: { type: string }
                 name: { type: string }
+                remark: { type: string }
+                is_encrypted:
+                  type: integer
+                  enum: [0, 1]
+                  default: 0
+                  description: "0=明文 1=GCM 加密落库（T-005b-3）"
       responses:
         "200":
           description: 成功
@@ -1177,6 +1189,10 @@ paths:
     put:
       tags: [System]
       summary: 更新参数
+      description: >-
+        T-005b-3：编辑态键/类型锁定 —— 不接受 config_key（唯一键禁改）、不接受 is_encrypted（明↔密切换走删除重建）。
+        config_value 指针三态：省略该字段=保持原值不动（密文/明文均不碰）；传入=按该行现有 is_encrypted
+        决定（加密行→GCM 重新加密覆盖，明文行→明文覆写）。前端加密行值框留空即省略，绝不回传 ******。
       operationId: updateConfig
       security: [{ BearerAuth: [] }]
       parameters: [{ name: id, in: path, required: true, schema: { type: string }, description: "对外 ID(hashid 字符串)" }]
@@ -1187,9 +1203,12 @@ paths:
             schema:
               type: object
               properties:
-                config_key: { type: string }
-                config_value: { type: string }
+                config_value:
+                  type: string
+                  nullable: true
+                  description: "省略=保持原值；传入=覆写（加密行重新加密）"
                 name: { type: string }
+                remark: { type: string }
       responses:
         "200":
           description: 成功

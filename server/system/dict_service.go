@@ -7,6 +7,7 @@
 // | @updated   2026-06-08 03:40:00
 // | @updated   2026-06-09 17:00:00  T-004e：唯一键冲突(1062)兜底转友好码（dict_type/config_key 防 500）
 // | @updated   2026-06-14 10:40:00  T-005b-4：dict/config 列表补关键字模糊 + 排序白名单；dict_data 真分页
+// | @updated   2026-06-15 10:30:00  T-005b-3：配置加密写链路 — Create 落密文 + Update 指针三态不破坏密文
 // +----------------------------------------------------------------------
 
 package system
@@ -16,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/benxin_dev/benxinadminpro-server/crypto"
 	"github.com/benxin_dev/benxinadminpro-server/dberr"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
 	"gorm.io/gorm"
@@ -186,12 +188,28 @@ func (s *DictService) DeleteData(ctx context.Context, id uint64) error {
 // --- 参数 ---
 
 type ConfigService struct {
-	db   *gorm.DB
-	errs *errcode.Registry
+	db     *gorm.DB
+	errs   *errcode.Registry
+	gcmKey []byte // GCM 主密钥（32 字节），可选；为空时加密参数写入返 ErrConfigDecryptFailed（不 panic）
 }
 
 func NewConfigService(db *gorm.DB, errs *errcode.Registry) *ConfigService {
 	return &ConfigService{db: db, errs: errs}
+}
+
+// SetGCMKey 注入 GCM 主密钥（可选 setter，不改构造签名零回归；同 SetPolicySync 范式）。
+// 明文参数无需密钥；加密参数（is_encrypted=1）写入须先注入，否则运行时返 ErrConfigDecryptFailed。
+func (s *ConfigService) SetGCMKey(key []byte) {
+	s.gcmKey = key
+}
+
+// encryptValue 用注入的 GCM 主密钥加密明文为 base64(nonce12||ct||tag)。
+// 密钥未配置返 ErrConfigDecryptFailed（运行时降级，不 panic）。
+func (s *ConfigService) encryptValue(plaintext string) (string, error) {
+	if len(s.gcmKey) == 0 {
+		return "", s.errs.ErrConfigDecryptFailed
+	}
+	return crypto.EncryptGCM(s.gcmKey, []byte(plaintext))
 }
 
 type CreateConfigInput struct {
@@ -199,6 +217,7 @@ type CreateConfigInput struct {
 	ConfigValue string `json:"config_value"`
 	Name        string `json:"name"`
 	Remark      string `json:"remark"`
+	IsEncrypted int8   `json:"is_encrypted"` // 0=明文 1=GCM 加密落库
 }
 
 func (s *ConfigService) Create(ctx context.Context, in CreateConfigInput) (*SysConfig, error) {
@@ -207,7 +226,15 @@ func (s *ConfigService) Create(ctx context.Context, in CreateConfigInput) (*SysC
 	if count > 0 {
 		return nil, s.errs.ErrConfigKeyExists
 	}
-	cfg := SysConfig{ConfigKey: in.ConfigKey, ConfigValue: in.ConfigValue, Name: in.Name, Remark: in.Remark}
+	value := in.ConfigValue
+	if in.IsEncrypted == 1 {
+		enc, err := s.encryptValue(value)
+		if err != nil {
+			return nil, err
+		}
+		value = enc
+	}
+	cfg := SysConfig{ConfigKey: in.ConfigKey, ConfigValue: value, Name: in.Name, Remark: in.Remark, IsEncrypted: in.IsEncrypted}
 	if err := s.db.WithContext(ctx).Create(&cfg).Error; err != nil {
 		if dberr.IsDuplicate(err) {
 			return nil, s.errs.ErrConfigKeyExists
@@ -288,15 +315,43 @@ func maskEncrypted(cfg *SysConfig) {
 	}
 }
 
-func (s *ConfigService) Update(ctx context.Context, id uint64, in CreateConfigInput) error {
-	result := s.db.WithContext(ctx).Model(&SysConfig{}).Where("id = ?", id).Updates(map[string]any{
-		"config_key": in.ConfigKey, "config_value": in.ConfigValue, "name": in.Name, "remark": in.Remark,
-	})
+// UpdateConfigInput 参数更新入参。
+// 类型锁定：不含 config_key（禁改）、不含 is_encrypted（明↔密切换走删除重建，不在编辑态做）。
+// ConfigValue 指针三态：nil（payload 未带）=保持原值不碰；非 nil=按该行现有 is_encrypted 决定加密或明文覆写。
+type UpdateConfigInput struct {
+	ConfigValue *string `json:"config_value"`
+	Name        string  `json:"name"`
+	Remark      string  `json:"remark"`
+}
+
+func (s *ConfigService) Update(ctx context.Context, id uint64, in UpdateConfigInput) error {
+	// 先查出该行，取其现有 is_encrypted 作为加密判据（不信入参，防类型被偷改）。
+	var existing SysConfig
+	err := s.db.WithContext(ctx).Where("id = ?", id).First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return s.errs.ErrConfigNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	updates := map[string]any{"name": in.Name, "remark": in.Remark}
+	// config_value 仅在显式传入（非 nil）时才写；省略=保持原密文/明文不动（靠 map 不含该键实现）。
+	if in.ConfigValue != nil {
+		value := *in.ConfigValue
+		if existing.IsEncrypted == 1 {
+			enc, encErr := s.encryptValue(value)
+			if encErr != nil {
+				return encErr
+			}
+			value = enc
+		}
+		updates["config_value"] = value
+	}
+
+	result := s.db.WithContext(ctx).Model(&SysConfig{}).Where("id = ?", id).Updates(updates)
 	if dberr.IsDuplicate(result.Error) {
 		return s.errs.ErrConfigKeyExists
-	}
-	if result.RowsAffected == 0 {
-		return s.errs.ErrConfigNotFound
 	}
 	return result.Error
 }

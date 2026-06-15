@@ -1,19 +1,19 @@
 <!--
   +----------------------------------------------------------------------
   | @project   本心通用管理后台 / BenxinAdminPro
-  | @mission   参数管理 — sys_config CRUD（#row-actions 插槽消费页；加密参数安全降级：脱敏展示+禁界面编辑）
+  | @mission   参数管理 — sys_config CRUD（#row-actions 插槽消费页；加密参数可建可编，编辑不破坏密文）
   | @author    仗键天涯(daxing)
   | @email     3442535897@qq.com
   | @date      2026-06-10 09:38:01
   | @updated   2026-06-14 11:58:00  T-005b-4：config_key 模糊 + created_at 排序后端已就绪，列筛选/排序真生效
+  | @updated   2026-06-15 10:30:00  T-005b-3：新建加 is_encrypted 选择 + 解禁加密行编辑（留空保持/重填替换，不破坏密文）
   +----------------------------------------------------------------------
   说明：列表/新增走 x-table 内置（permPrefix sys:config）；行操作经 #row-actions 插槽自定义。
        加密参数（is_encrypted=1）：值由后端恒脱敏为 ******（maskEncrypted，T-005），前端无任何
-       明文展示/打印/回填路径。其「编辑」按钮禁用——后端 /sys/configs 更新为全量覆写且无再加密
-       链路（CreateConfigInput 无 is_encrypted、Update 明文直写），界面编辑无论留空还是重填都会
-       破坏密文，故安全降级为禁编辑（缺口已按 T-007c 模式上报，后端补语义后放开）。
-       明文参数编辑走本页自有弹窗（config_key 唯一键禁改；表单仅回填非敏感明文值）。
-       T-005b-4：后端 list 已支持 config_key 模糊 + created_at 排序，列筛选/排序真生效（加密写链路仍归 T-005b-3）。
+       明文展示/打印/回填路径——加密行编辑表单的值框「打开即空」，绝不回填 ****** 或明文。
+       编辑语义（T-005b-3 后端指针三态）：值框「留空＝保持原密文不动」「填新值＝重新加密替换」；
+       明文行编辑值框正常回填、始终提交（含清空），零回归。config_key 唯一键禁改（编辑态锁定）。
+       新建：弹窗 is_encrypted 选「是」即落密文（后端 EncryptGCM），选「否」明文存。
 -->
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
@@ -26,13 +26,11 @@ import { listConfigs, createConfig, updateConfig, removeConfig, type ConfigRow }
 const tableRef = ref<InstanceType<typeof XTable>>()
 
 const encText = (v: unknown) => (Number(v) === 1 ? '是' : '否')
-const isEncrypted = (row: XRow) => Number((row as ConfigRow).is_encrypted) === 1
 
 const config: XTableConfig = {
   permPrefix: 'sys:config',
   api: {
     list: listConfigs,
-    // 新增仅明文参数：后端 CreateConfigInput 无 is_encrypted，加密参数无法经管理 API 创建（已上报）
     create: createConfig,
   },
   columns: [
@@ -47,34 +45,51 @@ const config: XTableConfig = {
     { prop: 'config_key', label: '参数键', required: true, placeholder: '如 site.title' },
     { prop: 'name', label: '参数名' },
     { prop: 'config_value', label: '参数值', type: 'textarea' },
+    // 加密选择：选「是」后端 EncryptGCM 落密文；默认明文
+    {
+      prop: 'is_encrypted',
+      label: '加密存储',
+      type: 'select',
+      default: 0,
+      options: [
+        { label: '否（明文）', value: 0 },
+        { label: '是（加密）', value: 1 },
+      ],
+    },
     { prop: 'remark', label: '备注', type: 'textarea' },
   ],
   actionsWidth: 150,
 }
 
-// ---- 编辑（自有弹窗，仅明文参数可达；加密行按钮已禁用）----
+// ---- 编辑（自有弹窗；加密行与明文行均可达，值处理按加密标志分流）----
 const editVisible = ref(false)
-const editForm = reactive({ id: '', config_key: '', name: '', config_value: '', remark: '' })
+const editForm = reactive({ id: '', config_key: '', name: '', config_value: '', remark: '', is_encrypted: 0 })
+const editIsEncrypted = () => editForm.is_encrypted === 1
 
 function openEdit(row: XRow): void {
   const r = row as ConfigRow
   editForm.id = r.id
   editForm.config_key = r.config_key
   editForm.name = r.name
-  // 仅明文参数走到这里（加密行编辑禁用），回填的是非敏感明文值，无明文泄漏面
-  editForm.config_value = r.config_value
   editForm.remark = r.remark
+  editForm.is_encrypted = Number(r.is_encrypted)
+  // 加密行：值恒为脱敏 ******，绝不回填（留空＝保持原密文）；明文行正常回填
+  editForm.config_value = editForm.is_encrypted === 1 ? '' : r.config_value
   editVisible.value = true
 }
 
 async function submitEdit(): Promise<void> {
+  // config_key 编辑态锁定，不提交；值字段按加密标志分流（落实后端指针三态语义）
+  const payload: Record<string, unknown> = { name: editForm.name, remark: editForm.remark }
+  if (editIsEncrypted()) {
+    // 加密行：填了新值才提交（重新加密替换）；留空则省略 config_value → 后端保持原密文
+    if (editForm.config_value !== '') payload.config_value = editForm.config_value
+  } else {
+    // 明文行：始终提交值（含清空），零回归
+    payload.config_value = editForm.config_value
+  }
   try {
-    await updateConfig(editForm.id, {
-      config_key: editForm.config_key,
-      config_value: editForm.config_value,
-      name: editForm.name,
-      remark: editForm.remark,
-    })
+    await updateConfig(editForm.id, payload)
   } catch {
     return // 请求层已 toast（如 409 参数键已存在），保留弹窗供修正
   }
@@ -113,20 +128,11 @@ async function onDelete(row: XRow): Promise<void> {
         <el-tag type="info">加密参数值恒显示为 ******（服务端脱敏）</el-tag>
       </template>
 
-      <!-- 行操作插槽：编辑（加密行安全降级禁用）+ 删除，均挂真实权限码 -->
+      <!-- 行操作插槽：编辑（加密行同样可编，值处理见弹窗）+ 删除，均挂真实权限码 -->
       <template #row-actions="{ row }">
-        <span v-permission="'sys:config:update'" class="cfg-op">
-          <el-tooltip
-            v-if="isEncrypted(row)"
-            content="加密参数暂不支持界面编辑（后端缺更新加密链路，已上报）"
-            placement="top"
-          >
-            <span>
-              <el-button link type="primary" :icon="Edit" disabled>编辑</el-button>
-            </span>
-          </el-tooltip>
-          <el-button v-else link type="primary" :icon="Edit" @click="openEdit(row)">编辑</el-button>
-        </span>
+        <el-button v-permission="'sys:config:update'" link type="primary" :icon="Edit" class="cfg-op" @click="openEdit(row)">
+          编辑
+        </el-button>
         <el-button v-permission="'sys:config:delete'" link type="danger" :icon="Delete" @click="onDelete(row)">
           删除
         </el-button>
@@ -143,7 +149,12 @@ async function onDelete(row: XRow): Promise<void> {
           <el-input v-model="editForm.name" />
         </el-form-item>
         <el-form-item label="参数值">
-          <el-input v-model="editForm.config_value" type="textarea" />
+          <el-input
+            v-model="editForm.config_value"
+            type="textarea"
+            :placeholder="editIsEncrypted() ? '留空＝保持原密文不变，填写＝重新加密替换' : ''"
+          />
+          <div v-if="editIsEncrypted()" class="cfg-enc-tip">加密参数：值不回显，留空即保持原值</div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="editForm.remark" type="textarea" />
@@ -160,5 +171,10 @@ async function onDelete(row: XRow): Promise<void> {
 <style scoped lang="scss">
 .cfg-op {
   margin-right: 8px;
+}
+.cfg-enc-tip {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 </style>
