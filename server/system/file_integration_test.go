@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 02:00:00
+// | @updated   2026-06-15 21:07:05  T-010a：fileDSN 改读 BENXIN_TEST_MYSQL_DSN（testsupport 收口，默认不变）
 // +----------------------------------------------------------------------
 //
 // 运行方式：go test -tags=integration ./system/... -v -count=1 -run TestFile
@@ -24,15 +25,16 @@ import (
 
 	"github.com/benxin_dev/benxinadminpro-server/drivers/storage"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
+	"github.com/benxin_dev/benxinadminpro-server/internal/testsupport"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
-const (
-	fileDSN    = "root:root@tcp(localhost:3306)/benxinadminpro?charset=utf8mb4&parseTime=true&loc=Local"
-	filePrefix = "t004b_"
-)
+const filePrefix = "t004b_"
+
+// fileDSN：优先 BENXIN_TEST_MYSQL_DSN，缺省本地默认。
+var fileDSN = testsupport.MySQLDSN()
 
 func setupFileIntegration(t *testing.T) (*FileService, *storage.LocalDriver, *gorm.DB) {
 	t.Helper()

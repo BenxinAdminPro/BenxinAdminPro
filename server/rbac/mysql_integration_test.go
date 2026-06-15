@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 15:36:00
 // | @updated   2026-06-15 19:16:47  T-003d-fix：RoleInheritance 陈旧 URL 断言重写为 perm code + 同主体负向对照
+// | @updated   2026-06-15 21:07:05  T-010a：testDSN 改读 BENXIN_TEST_MYSQL_DSN（testsupport 收口，默认不变）
 // +----------------------------------------------------------------------
 //
 // 运行方式：go test -tags=integration ./rbac/... -v -count=1
@@ -26,14 +27,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/benxin_dev/benxinadminpro-server/internal/testsupport"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
-const (
-	testDSN         = "root:root@tcp(localhost:3306)/benxinadminpro?charset=utf8mb4&parseTime=true&loc=Local"
-	testTablePrefix = "inttest_"
-)
+const testTablePrefix = "inttest_"
+
+// testDSN：优先 BENXIN_TEST_MYSQL_DSN，缺省本地默认（dup_integration_test.go 同包复用）。
+var testDSN = testsupport.MySQLDSN()
 
 func specMigrationDir() string {
 	_, file, _, _ := runtime.Caller(0)

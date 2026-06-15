@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 01:05:00
+// | @updated   2026-06-15 21:07:05  T-010a：intTestDSN 改读 BENXIN_TEST_MYSQL_DSN（testsupport 收口，默认不变）
 // +----------------------------------------------------------------------
 //
 // 运行方式：go test -tags=integration ./system/... -v -count=1
@@ -22,15 +23,16 @@ import (
 	"testing"
 
 	"github.com/benxin_dev/benxinadminpro-server/auth"
+	"github.com/benxin_dev/benxinadminpro-server/internal/testsupport"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
-const (
-	intTestDSN    = "root:root@tcp(localhost:3306)/benxinadminpro?charset=utf8mb4&parseTime=true&loc=Local"
-	intTestPrefix = "t004a_"
-)
+const intTestPrefix = "t004a_"
+
+// intTestDSN：优先 BENXIN_TEST_MYSQL_DSN，缺省本地默认。
+var intTestDSN = testsupport.MySQLDSN()
 
 func intMigrationDir() string {
 	_, file, _, _ := runtime.Caller(0)

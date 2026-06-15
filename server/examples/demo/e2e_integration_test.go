@@ -4,15 +4,16 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 12:00:00
+// | @updated   2026-06-15 21:07:05  T-010a：连接串退役 DEMO_E2E_*，统一改读 testsupport（BENXIN_TEST_*）；测试密钥/secret 不动
 // +----------------------------------------------------------------------
 //
 // 运行方式：
 //   docker compose -f deploy/docker-compose.dev.yml up -d   # 起 MySQL + Redis
 //   go test -tags=integration ./examples/demo/ -v -count=1 -run TestDemoE2ESmoke
 //
-// 依赖地址可经环境变量覆盖（端口冲突时用）：
-//   DEMO_E2E_MYSQL_DSN   默认 root:root@tcp(127.0.0.1:3306)/benxinadminpro?charset=utf8mb4&parseTime=true&loc=Local
-//   DEMO_E2E_REDIS_ADDR  默认 127.0.0.1:6379
+// 依赖地址可经环境变量覆盖（端口冲突时用，与全仓集成测试统一命名空间）：
+//   BENXIN_TEST_MYSQL_DSN   默认 root:root@tcp(localhost:3306)/benxinadminpro?charset=utf8mb4&parseTime=true&loc=Local
+//   BENXIN_TEST_REDIS_ADDR  默认 localhost:6379
 //
 // 覆盖链路（每步带断言）：
 //   迁移建表 → 种子数据 → captcha → login 拿 token → 带 token 受保护接口 200
@@ -30,11 +31,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/benxin_dev/benxinadminpro-server/auth"
+	"github.com/benxin_dev/benxinadminpro-server/internal/testsupport"
 	"github.com/benxin_dev/benxinadminpro-server/rbac"
 	"github.com/benxin_dev/benxinadminpro-server/system"
 	"github.com/redis/go-redis/v9"
@@ -50,16 +51,7 @@ const (
 	e2eEditorPwd    = "editor-e2e-pwd"
 	e2eDeptMgrPwd   = "deptmgr-e2e-pwd"
 	e2eBizPwd       = "biz-e2e-pwd"
-	defaultE2EDSN   = "root:root@tcp(127.0.0.1:3306)/benxinadminpro?charset=utf8mb4&parseTime=true&loc=Local"
-	defaultE2ERedis = "127.0.0.1:6379"
 )
-
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
 
 // e2eConfig 构造自包含的 demoConfig：固定测试密钥、隔离表/redis 前缀、全部种子密码就位。
 func e2eConfig(t *testing.T) demoConfig {
@@ -91,8 +83,8 @@ func e2eConfig(t *testing.T) demoConfig {
 			"admin": e2eAdminPwd, "editor": e2eEditorPwd,
 			"dept_mgr": e2eDeptMgrPwd, "biz_user": e2eBizPwd,
 		},
-		MySQLDSN:      envOr("DEMO_E2E_MYSQL_DSN", defaultE2EDSN),
-		RedisAddr:     envOr("DEMO_E2E_REDIS_ADDR", defaultE2ERedis),
+		MySQLDSN:      testsupport.MySQLDSN(),
+		RedisAddr:     testsupport.RedisAddr(),
 		RedisDB:       e2eRedisDB,
 		RedisPassword: "",
 	}

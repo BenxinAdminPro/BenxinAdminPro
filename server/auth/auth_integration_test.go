@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 18:00:00
+// | @updated   2026-06-15 21:07:05  T-010a：Redis Addr 改读 BENXIN_TEST_REDIS_ADDR（testsupport 收口，默认不变）
 // +----------------------------------------------------------------------
 //
 // 运行方式：go test -tags=integration ./auth/... -v -count=1
@@ -18,13 +19,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/benxin_dev/benxinadminpro-server/internal/testsupport"
 	"github.com/redis/go-redis/v9"
 )
 
 func integrationRedisClient(t *testing.T, db int) *redis.Client {
 	t.Helper()
 	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: testsupport.RedisAddr(),
 		DB:   db,
 	})
 	if err := client.Ping(context.Background()).Err(); err != nil {
