@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 01:20:00
 // | @updated   2026-06-14 10:48:00  T-005b-4：列表补文件名/上传人用户名模糊 + 排序 + uploader 可读化
+// | @updated   2026-06-16 11:55:00  T-011b：mime 大类筛（token→后端常量前缀）+ 批量软删 BatchDelete
 // +----------------------------------------------------------------------
 
 package system
@@ -116,6 +117,7 @@ func (s *FileService) Download(ctx context.Context, id uint64) (*SysFile, io.Rea
 type FileListQuery struct {
 	UploaderName string // 按上传人用户名模糊（uploader 存内部 ID，先映射 username→ID 集）
 	OriginalName string // 文件名模糊
+	MimeCategory string // mime 大类 token（image/video/audio/other）；未命中/空 → 不筛
 	Sort         string
 	Order        string
 	Page         int
@@ -128,6 +130,30 @@ func (q *FileListQuery) normalize() {
 }
 
 var fileSortable = map[string]string{"created_at": "created_at", "size": "size", "id": "id"}
+
+// mimeCategoryPrefix 大类 token → mime 前缀（值为后端常量，绝不取用户输入拼 SQL 片段）。
+var mimeCategoryPrefix = map[string]string{
+	"image": "image/",
+	"video": "video/",
+	"audio": "audio/",
+}
+
+// applyMimeCategory 按 mime 大类 token 加筛（裁决④：token→后端常量前缀，用户输入永不进 SQL 片段）。
+// image/video/audio → mime LIKE '<前缀>%'；other → 排除三大类；未命中/空 → 不加筛（同 sort 白名单回退范式）。
+// 前缀为常量字面量、无 LIKE 特殊字符，故 image/video/audio 走参数化绑定、other 走纯常量 SQL，均无注入面。
+func applyMimeCategory(query *gorm.DB, category string) *gorm.DB {
+	switch category {
+	case "image", "video", "audio":
+		return query.Where("mime LIKE ?", mimeCategoryPrefix[category]+"%")
+	case "other":
+		return query.Where("mime NOT LIKE 'image/%' AND mime NOT LIKE 'video/%' AND mime NOT LIKE 'audio/%'")
+	default:
+		return query // 含空串/未知 token：不加筛，绝不报错（防探测、与 sort 回退同口径）
+	}
+}
+
+// maxBatchDeleteIDs 批量软删单次 id 上限（对齐列表分页封顶，防超大请求）。
+const maxBatchDeleteIDs = 100
 
 // List 文件分页列表（T-005b-4：补文件名/上传人用户名模糊 + 排序 + uploader 可读化）。
 func (s *FileService) List(ctx context.Context, q FileListQuery) ([]SysFile, int64, error) {
@@ -144,6 +170,7 @@ func (s *FileService) List(ctx context.Context, q FileListQuery) ([]SysFile, int
 	if q.OriginalName != "" {
 		query = query.Where("original_name LIKE ?", likePattern(q.OriginalName))
 	}
+	query = applyMimeCategory(query, q.MimeCategory)
 	var total int64
 	query.Count(&total)
 	var list []SysFile
@@ -195,4 +222,51 @@ func (s *FileService) Delete(ctx context.Context, id uint64) error {
 	}()
 
 	return nil
+}
+
+// BatchDelete 批量软删 + 逐个物理异步清理（单条 IN bulk 幂等）。
+// 先取实际存在(未软删)行的 id+storage_key（模型查询带软删 scope → 已删/不存在 id 自然不入命中集 = 幂等），
+// 再对命中集 status=1 + 模型 Delete（单 UPDATE deleted_at，软删 scope 自动生效；勿 .Table() 避开静默失效陷阱），
+// 物理清理沿用单条 Delete 的 per-file fire-and-forget 范式（失败仅 slog、不回滚、无法纳事务）。
+// 返回实际软删行数（= 命中集大小 = deleted_count）。调用方负责 id 解码/空/封顶校验。
+func (s *FileService) BatchDelete(ctx context.Context, ids []uint64) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	// 取真实存在且未软删的行（模型查询自动加 deleted_at IS NULL scope → 幂等基础）
+	var existing []SysFile
+	if err := s.db.WithContext(ctx).Model(&SysFile{}).
+		Select("id", "storage_key").
+		Where("id IN ?", ids).
+		Find(&existing).Error; err != nil {
+		return 0, err
+	}
+	if len(existing) == 0 {
+		return 0, nil
+	}
+	existIDs := make([]uint64, 0, len(existing))
+	for i := range existing {
+		existIDs = append(existIDs, existing[i].ID)
+	}
+
+	// 标待清理 + 软删（模型 Delete，软删 scope 生效）
+	s.db.WithContext(ctx).Model(&SysFile{}).Where("id IN ?", existIDs).Update("status", 1)
+	res := s.db.WithContext(ctx).Where("id IN ?", existIDs).Delete(&SysFile{})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+
+	// 逐个异步物理清理（与单条 Delete 一致）
+	for i := range existing {
+		key := existing[i].StorageKey
+		go func(k string) {
+			if err := s.driver.Delete(context.Background(), k); err != nil {
+				slog.Error("file_physical_delete_failed",
+					slog.String("key", k),
+					slog.String("error", err.Error()))
+			}
+		}(key)
+	}
+
+	return int(res.RowsAffected), nil
 }

@@ -8,6 +8,7 @@
 // | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 PermGuard，路由走真 enforce
 // | @updated   2026-06-09 16:09:17  T-004d：对外 ID hashid 化 — :id 解码 + 出参 encoder（注入 idcodec hasher）
 // | @updated   2026-06-14 10:55:00  T-005b-4：列表补文件名/上传人用户名模糊 + 排序（FileListQuery）
+// | @updated   2026-06-16 11:55:00  T-011b：列表 mime_category 大类筛 + 批量软删端点 POST /sys/files/batch-delete
 // +----------------------------------------------------------------------
 
 package system
@@ -43,6 +44,8 @@ func (h *FileHandler) RegisterRoutes(rg *gin.RouterGroup, guard PermGuard) {
 	rg.GET("/sys/files/:id/download", guard.RequirePerm("sys:file:download"), h.Download)
 	rg.GET("/sys/files", guard.RequirePerm("sys:file:list"), h.List)
 	rg.DELETE("/sys/files/:id", guard.RequirePerm("sys:file:delete"), h.Delete)
+	// T-011b：批量软删（复用 sys:file:delete 权限码，不新增码）
+	rg.POST("/sys/files/batch-delete", guard.RequirePerm("sys:file:delete"), h.BatchDelete)
 }
 
 // Upload 上传文件（multipart）。
@@ -114,12 +117,41 @@ func (h *FileHandler) List(c *gin.Context) {
 	list, total, _ := h.svc.List(c.Request.Context(), FileListQuery{
 		UploaderName: c.Query("uploader_name"),
 		OriginalName: c.Query("original_name"),
+		MimeCategory: c.Query("mime_category"),
 		Sort:         c.Query("sort"),
 		Order:        c.Query("order"),
 		Page:         page,
 		PageSize:     ps,
 	})
 	response.OK(c, h.enc.Page(list, total, page, ps))
+}
+
+// BatchDelete 批量软删（入参 hashid 数组，复用 sys:file:delete 权限码）。
+// 校验顺序（写前 fail-fast）：空数组/超封顶 → 400(BadReq)；任一非法 hashid → 400(ErrInvalidID，防伪造探测)。
+// 幂等：已删/不存在 id 不计入 deleted_count（service IN bulk 取实际命中集）。
+func (h *FileHandler) BatchDelete(c *gin.Context) {
+	var req struct {
+		IDs []string `json:"ids"` // hashid[]
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadReq(c)
+		return
+	}
+	if len(req.IDs) == 0 || len(req.IDs) > maxBatchDeleteIDs {
+		response.BadReq(c)
+		return
+	}
+	ids, err := decodeHashSlice(h.hasher, req.IDs)
+	if err != nil {
+		response.AbortErr(c, h.errs.ErrInvalidID.Code)
+		return
+	}
+	n, err := h.svc.BatchDelete(c.Request.Context(), ids)
+	if err != nil {
+		response.ErrResp(c, err)
+		return
+	}
+	response.OK(c, gin.H{"deleted_count": n})
 }
 
 // Delete 删除文件。

@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-09 16:09:17
+// | @updated   2026-06-16 11:55:00  T-011b：批量 hashid 数组解码 decodeHashSlice（fail-fast，供批量软删）
 // +----------------------------------------------------------------------
 
 package system
@@ -37,4 +38,27 @@ func decodePathID(c *gin.Context, hasher *idcodec.Hasher, errs *errcode.Registry
 		return 0, err
 	}
 	return id, nil
+}
+
+// decodeHashSlice 批量解码对外 hashid 数组 → 内部 uint64（fail-fast：任一非法即返错，调用方回 400）。
+// hasher 为 nil（未启用 hashid、入参亦裸十进制）时退化裸解析，与 decodePathID 同口径保进出对称。
+// 不去重、不排序（保持调用方原序语义）；调用方据 err 走 ErrInvalidID 防伪造/探测、不暴露内部 id。
+func decodeHashSlice(hasher *idcodec.Hasher, hashes []string) ([]uint64, error) {
+	ids := make([]uint64, 0, len(hashes))
+	for _, s := range hashes {
+		if hasher != nil {
+			id, err := hasher.Decode(s)
+			if err != nil {
+				return nil, err
+			}
+			ids = append(ids, id)
+			continue
+		}
+		id, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }

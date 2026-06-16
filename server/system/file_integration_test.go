@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 02:00:00
 // | @updated   2026-06-15 21:07:05  T-010a：fileDSN 改读 BENXIN_TEST_MYSQL_DSN（testsupport 收口，默认不变）
+// | @updated   2026-06-16 11:55:00  T-011b：mime 大类筛 + 批量软删（真库 IN bulk 幂等 + scope + 物理清理）
 // +----------------------------------------------------------------------
 //
 // 运行方式：go test -tags=integration ./system/... -v -count=1 -run TestFile
@@ -22,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/benxin_dev/benxinadminpro-server/drivers/storage"
 	"github.com/benxin_dev/benxinadminpro-server/errcode"
@@ -169,6 +171,100 @@ func TestFileIntegration_ListAndFilter(t *testing.T) {
 	_, total, _ = svc.List(ctx, FileListQuery{OriginalName: "a.txt", Page: 1, PageSize: 10})
 	if total != 1 {
 		t.Errorf("filtered total: %d", total)
+	}
+}
+
+// TestFileIntegration_MimeCategory：真库验 mime 大类前缀筛（image/video/audio/other 各回正确子集）。
+func TestFileIntegration_MimeCategory(t *testing.T) {
+	svc, _, db := setupFileIntegration(t)
+	ctx := context.Background()
+
+	mk := func(name, mime string) {
+		f := SysFile{OriginalName: name, StorageKey: "k/" + name, StorageType: "local", Size: 1, Mime: mime, Ext: "bin"}
+		if err := db.Create(&f).Error; err != nil {
+			t.Fatalf("seed %s: %v", name, err)
+		}
+	}
+	mk("a.png", "image/png")
+	mk("b.jpg", "image/jpeg")
+	mk("c.mp4", "video/mp4")
+	mk("d.mp3", "audio/mpeg")
+	mk("e.pdf", "application/pdf")
+
+	check := func(cat string, want int64) {
+		_, total, _ := svc.List(ctx, FileListQuery{MimeCategory: cat, Page: 1, PageSize: 50})
+		if total != want {
+			t.Errorf("mime_category=%q real DB: total=%d, want %d", cat, total, want)
+		}
+	}
+	check("image", 2) // png + jpeg
+	check("video", 1) // mp4
+	check("audio", 1) // mpeg
+	check("other", 1) // pdf（排除三大类）
+	check("", 5)      // 不筛 = 全量
+}
+
+// TestFileIntegration_BatchDelete：真库 IN bulk 软删 + 幂等 + scope 排除 + 物理清理。
+func TestFileIntegration_BatchDelete(t *testing.T) {
+	svc, driver, _ := setupFileIntegration(t)
+	ctx := context.Background()
+
+	up := func(name string) *SysFile {
+		f, err := svc.Upload(ctx, name, "text/plain", 3, strings.NewReader("abc"), "admin")
+		if err != nil {
+			t.Fatalf("upload %s: %v", name, err)
+		}
+		return f
+	}
+	f1, f2, f3 := up("1.txt"), up("2.txt"), up("3.txt")
+
+	// 上传后盘上文件应存在
+	for _, f := range []*SysFile{f1, f2, f3} {
+		if _, err := os.Stat(filepath.Join(driver.GetRootDir(), f.StorageKey)); err != nil {
+			t.Fatalf("expected disk file for %s: %v", f.StorageKey, err)
+		}
+	}
+
+	// 批量软删 f1,f2 → deleted_count=2
+	n, err := svc.BatchDelete(ctx, []uint64{f1.ID, f2.ID})
+	if err != nil {
+		t.Fatalf("BatchDelete: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("deleted_count: got %d, want 2", n)
+	}
+
+	// 软删行从 list 消失（真 MySQL 软删 scope 生效，未踩 .Table 陷阱）
+	_, total, _ := svc.List(ctx, FileListQuery{Page: 1, PageSize: 50})
+	if total != 1 {
+		t.Errorf("list after batch delete: total=%d, want 1 (only f3)", total)
+	}
+
+	// 幂等：再删 f1,f2（已删）+ 不存在 id → deleted_count=0
+	n, _ = svc.BatchDelete(ctx, []uint64{f1.ID, f2.ID, 999999})
+	if n != 0 {
+		t.Errorf("idempotent deleted_count: got %d, want 0", n)
+	}
+
+	// 物理清理异步：轮询 f1/f2 盘上文件已删、f3 仍在
+	gone := func(key string) bool {
+		full := filepath.Join(driver.GetRootDir(), key)
+		for i := 0; i < 40; i++ {
+			if _, err := os.Stat(full); os.IsNotExist(err) {
+				return true
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		return false
+	}
+	if !gone(f1.StorageKey) {
+		t.Errorf("f1 physical file not cleaned: %s", f1.StorageKey)
+	}
+	if !gone(f2.StorageKey) {
+		t.Errorf("f2 physical file not cleaned: %s", f2.StorageKey)
+	}
+	if _, err := os.Stat(filepath.Join(driver.GetRootDir(), f3.StorageKey)); err != nil {
+		t.Errorf("f3 (not deleted) disk file should remain: %v", err)
 	}
 }
 

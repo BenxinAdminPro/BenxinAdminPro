@@ -64,13 +64,24 @@ func TestFileHandlerRegisterRoutesWiresGuard(t *testing.T) {
 	router := gin.New()
 	h.RegisterRoutes(&router.RouterGroup, g)
 
-	if len(g.codes) != 4 {
-		t.Fatalf("expected 4 file routes wired to guard, got %d: %v", len(g.codes), g.codes)
+	// T-011b：新增 POST /sys/files/batch-delete（复用 sys:file:delete）→ 5 条路由
+	if len(g.codes) != 5 {
+		t.Fatalf("expected 5 file routes wired to guard, got %d: %v", len(g.codes), g.codes)
 	}
 	for _, want := range []string{"sys:file:upload", "sys:file:download", "sys:file:list", "sys:file:delete"} {
 		if !contains(g.codes, want) {
 			t.Errorf("perm code %q not wired", want)
 		}
+	}
+	// batch-delete 复用 sys:file:delete → 该码应被申领两次（DELETE :id + POST batch-delete）
+	deleteCount := 0
+	for _, code := range g.codes {
+		if code == "sys:file:delete" {
+			deleteCount++
+		}
+	}
+	if deleteCount != 2 {
+		t.Errorf("sys:file:delete should be wired twice (single + batch), got %d", deleteCount)
 	}
 
 	req := httptest.NewRequest("DELETE", "/sys/files/1", nil)

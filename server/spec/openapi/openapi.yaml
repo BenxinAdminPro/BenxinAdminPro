@@ -8,6 +8,7 @@
 # | @updated   2026-06-09 10:40:13  T-003e：对外 ID 入参收口 hashid，入出参对称
 # | @updated   2026-06-09 16:09:17  T-004d：system 对外 ID 全链路 hashid（出参+path :id），补全 dict/config item 路径
 # | @updated   2026-06-14 15:35:00  T-005b-4 v0.11.0 列表查询能力；T-008b v0.12.0 用户详情加 roles 出参
+# | @updated   2026-06-16 11:55:00  T-011b v0.15.0 文件 mime 大类筛 + 批量软删端点
 # +----------------------------------------------------------------------
 
 openapi: "3.0.3"
@@ -46,7 +47,15 @@ info:
     v0.14.0: 配置加密参数写链路（T-005b-3）。createConfig 入参加 is_encrypted（0/1，=1 走 GCM 加密落库）；
             updateConfig 编辑态键/类型锁定（不接受 config_key/is_encrypted），config_value 指针三态：
             省略=保持原值（不破坏密文）、传入=按现有 is_encrypted 加密或明文覆写。列表/详情仍恒脱敏 ******。
-  version: "0.14.0"
+    v0.15.0: 文件 mime 大类筛 + 批量软删（T-011b）。GET /sys/files 加 mime_category 查询参数
+            （枚举 image/video/audio/other，后端 token→前缀白名单映射，未命中/空不筛）。新增
+            POST /sys/files/batch-delete（复用 sys:file:delete 权限码）：入参 ids hashid 数组
+            （非空、封顶 100），单条 IN bulk 幂等软删，出参 deleted_count=实际软删行数；非法 hashid/
+            空数组/超 100 → 400（复用 sys.invalid_id / 通用 400）。零新增错误码段、零 DDL。
+            搭车补回：T-009b 的菜单专属父节点错误码 ErrInvalidParentMenu（RBAC offset 47 /
+            sys.invalid_parent_menu，Go 常量 T-009b 已落并在用）原计划 0.14.1 但从未落入 openapi.yaml
+            （c9db3a9 diff 未含本文件），本版于错误码段说明中一并物化；纯文档补全、无 Go 行为/端点/schema 变更。
+  version: "0.15.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -111,9 +120,10 @@ components:
         code:
           type: integer
           description: |
-            逻辑错误码 = security_segment_base + offset。
+            逻辑错误码 = security_segment_base + offset（本表为采样说明、非逐码穷举）。
             T-001 offset: +1~+9 (security)
             T-002 offset: +20~+24 (auth)
+            RBAC 段含菜单专属父节点码 +47 (sys.invalid_parent_menu) —— T-009b 追补，v0.15.0 一并物化。
           example: 11001
         message:
           type: string
@@ -1340,6 +1350,7 @@ paths:
       parameters:
         - { name: uploader_name, in: query, schema: { type: string }, description: "按上传人用户名模糊" }
         - { name: original_name, in: query, schema: { type: string }, description: "文件名模糊" }
+        - { name: mime_category, in: query, schema: { type: string, enum: [image, video, audio, other] }, description: "T-011b：mime 大类筛（token→后端前缀白名单；未命中/空不筛）。image/video/audio→对应 mime 前缀；other→排除三大类" }
         - { name: sort, in: query, schema: { type: string, enum: [created_at, size, id] } }
         - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
         - { name: page, in: query, schema: { type: integer } }
@@ -1350,6 +1361,34 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sys/files/batch-delete:
+    post:
+      tags: [File]
+      summary: 批量软删文件
+      description: "T-011b：批量软删（复用 sys:file:delete 权限码）。入参 ids 为 hashid 数组（非空、封顶 100）；单条 IN bulk 幂等软删（已删/不存在 id 自然跳过），出参 deleted_count=实际软删行数；物理文件异步清理。非法 hashid/空数组/超 100 → 400。"
+      operationId: batchDeleteFiles
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { type: string }
+                  description: "对外 hashid 数组（非空、最多 100）"
+      responses:
+        "200":
+          description: 批量软删成功（data.deleted_count = 实际软删行数）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+        "400":
+          description: 空数组 / 超封顶 100 / 含非法 hashid
 
   /sys/files/{id}/download:
     get:
