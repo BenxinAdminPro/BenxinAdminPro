@@ -1,14 +1,17 @@
 <!--
   +----------------------------------------------------------------------
   | @project   本心通用管理后台 / BenxinAdminPro
-  | @mission   x-table 增强能力 harness — 只读/工具栏插槽/行操作/列筛选排序 目视验证页
+  | @mission   x-table 增强能力 harness — 只读/工具栏插槽/行操作/列筛选排序/多选 目视验证页
   | @author    仗键天涯(daxing)
   | @email     3442535897@qq.com
   | @date      2026-06-09 14:30:00
+  | @updated   2026-06-16 11:26:18  T-011a：加 selectable 多选示例（#batch-actions 槽 + 选中数 + 清空）+ off 对照
   +----------------------------------------------------------------------
-  说明：本页仅用于 T-007c 单独目视验证 x-table 新能力，使用内存 mock 数据不依赖后端。
+  说明：本页仅用于单独目视验证 x-table 新能力，使用内存 mock 数据不依赖后端。
        mock api 真实按 query 参数过滤/排序/分页，并回显最近一次 query，证明筛选/排序条件确实并入请求。
        端到端真验证在 T-007d/e/f 首个消费方页落地时回证（见任务书测试铁律）。
+       T-011a：下方「多选」卡 selectable=true 验证选中态/批量槽/清空；上方「只读增强」卡 selectable 未设
+       = 缺省零回归对照（无选择列）。多选消费方真验证在 T-011c 媒体批量删落地。
 -->
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -104,6 +107,35 @@ const readonlyConfig: XTableConfig<DemoRow> = {
     },
   ],
 }
+
+// T-011a：多选示例 —— selectable=true，#batch-actions 槽读 selected/clear；只读 + 行操作并存
+const selectableConfig: XTableConfig<DemoRow> = {
+  readonly: true,
+  selectable: true,
+  api: mockApi,
+  actionsWidth: 120,
+  columns: [
+    { prop: 'name', label: '名称', minWidth: 140 },
+    { prop: 'category', label: '分类', minWidth: 120 },
+    { prop: 'status', label: '状态', width: 100, formatter: (_r, v) => statusText(v) },
+    { prop: 'created_at', label: '创建时间', minWidth: 170 },
+  ],
+  actions: [
+    {
+      label: '详情',
+      icon: View,
+      handler: (row) => {
+        ElMessageBox.alert(JSON.stringify(row, null, 2), '行详情', { confirmButtonText: '关闭' })
+      },
+    },
+  ],
+}
+
+// 批量操作（演示，仅前端提示；真批量删端点属 T-011b 后端）
+function onBatchDemo(selected: XRow[]): void {
+  const names = selected.map((r) => (r as DemoRow).name).join('、')
+  ElMessage.success(`已对 ${selected.length} 项执行批量操作（演示）：${names}`)
+}
 </script>
 
 <template>
@@ -111,18 +143,32 @@ const readonlyConfig: XTableConfig<DemoRow> = {
     <el-alert
       type="info"
       :closable="false"
-      title="x-table 增强 harness（T-007c）"
-      description="只读模式 + 工具栏插槽 + 自定义行操作（含 v-permission / 危险确认）+ 列筛选 + 服务端排序。mock 数据，最近 query 见下方。"
+      title="x-table 增强 harness（T-007c / T-011a）"
+      description="只读模式 + 工具栏插槽 + 自定义行操作（含 v-permission / 危险确认）+ 列筛选 + 服务端排序 + 多选（T-011a）。mock 数据，最近 query 见下方。"
       style="margin-bottom: 16px"
     />
 
     <el-card shadow="never">
+      <template #header>只读增强（selectable 未设 = 缺省零回归对照：无选择列）</template>
       <XTable :config="readonlyConfig">
         <!-- 工具栏插槽：自定义按钮区（如上传/批量），不传则无空位 -->
         <template #toolbar>
           <el-button type="success" :icon="Upload" @click="ElMessage.info('工具栏插槽按钮点击（演示）')">
             自定义工具栏按钮
           </el-button>
+        </template>
+      </XTable>
+    </el-card>
+
+    <el-card shadow="never" style="margin-top: 16px">
+      <template #header>多选（T-011a · selectable=true）：勾选行 → #batch-actions 槽读选中数/清空</template>
+      <XTable :config="selectableConfig">
+        <!-- 批量操作槽：slot props 透出 selected（当前选中行）与 clear（清空选中） -->
+        <template #batch-actions="{ selected, clear }">
+          <el-button type="danger" :disabled="!selected.length" @click="onBatchDemo(selected)">
+            批量操作（已选 {{ selected.length }}）
+          </el-button>
+          <el-button :disabled="!selected.length" @click="clear">清空选中</el-button>
         </template>
       </XTable>
     </el-card>

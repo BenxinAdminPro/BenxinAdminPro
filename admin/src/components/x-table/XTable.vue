@@ -8,6 +8,7 @@
   | @updated   2026-06-09 14:30:00  T-007c：只读模式 + 工具栏/行操作插槽 + 列筛选/排序（服务端）
   | @updated   2026-06-10 09:38:01  T-007d：增改删/拉取失败兜底 catch（请求层已 toast；失败保留弹窗、不冒未处理 rejection）
   | @updated   2026-06-12 14:24:57  T-007h：表单字段插槽(#field-<prop>) + api.get 编辑回填详情 + delConfirm 覆写 + 数组默认值拷贝
+  | @updated   2026-06-16 11:26:18  T-011a：selectable 多选列 + 选中态暴露(selectedRows/clearSelection) + #batch-actions 槽（gated 缺省零回归）
   +----------------------------------------------------------------------
   说明：通用底座组件，业务中立；对接 T-007a 请求层（统一包络/错误码/hashid 透传）。
        内置增删改按钮挂 v-permission（permPrefix:create/update/delete），仅 UX，后端才是边界。
@@ -28,6 +29,18 @@ const slots = useSlots()
 const rowKey = computed(() => props.config.rowKey || 'id')
 const permPrefix = computed(() => props.config.permPrefix || '')
 const readonly = computed(() => props.config.readonly === true)
+const selectable = computed(() => props.config.selectable === true)
+
+// ---- 多选（仅 selectable 时启用；缺省 false → 选择列不渲染、@selection-change 永不触发）----
+const elTableRef = ref()
+const selectedRows = ref<XRow[]>([])
+function onSelectionChange(rows: XRow[]): void {
+  selectedRows.value = rows
+}
+function clearSelection(): void {
+  elTableRef.value?.clearSelection()
+  selectedRows.value = []
+}
 
 // ---- 列表 + 分页 ----
 const loading = ref(false)
@@ -73,6 +86,8 @@ async function fetchData(): Promise<void> {
     const res = await props.config.api.list(params)
     rows.value = res.list || []
     total.value = res.total || 0
+    // 新数据落表 → el-table 默认不保留选中（未启用 reserve-selection），同步清内部选中态
+    if (selectable.value) selectedRows.value = []
   } catch {
     // 请求层已按错误码 toast；此处吞掉避免未处理 rejection，保留旧数据
   } finally {
@@ -240,13 +255,14 @@ async function runAction(a: XAction, row: XRow): Promise<void> {
 
 // ---- 工具栏 / 操作列 是否渲染（缺省即 T-007b 现状）----
 const showAddBtn = computed(() => !readonly.value && !!permPrefix.value)
-const showToolbar = computed(() => showAddBtn.value || !!slots.toolbar)
+const showBatchActions = computed(() => selectable.value && !!slots['batch-actions'])
+const showToolbar = computed(() => showAddBtn.value || !!slots.toolbar || showBatchActions.value)
 const showOpColumn = computed(
   () => !!slots['row-actions'] || (props.config.actions?.length ?? 0) > 0 || !readonly.value,
 )
 
 onMounted(fetchData)
-defineExpose({ refresh: fetchData })
+defineExpose({ refresh: fetchData, selectedRows, clearSelection })
 </script>
 
 <template>
@@ -292,17 +308,24 @@ defineExpose({ refresh: fetchData })
         {{ t('table.add') }}
       </el-button>
       <slot name="toolbar" />
+      <!-- 批量操作槽：仅 selectable 时启用，slot props 透出当前选中行与清空方法 -->
+      <slot v-if="selectable" name="batch-actions" :selected="selectedRows" :clear="clearSelection" />
     </div>
 
     <!-- 表格 -->
     <el-table
+      ref="elTableRef"
       v-loading="loading"
       :data="rows"
       border
       stripe
       :row-key="rowKey"
       @sort-change="onSortChange"
+      @selection-change="onSelectionChange"
     >
+      <!-- 多选列：仅 selectable 时渲染（缺省不渲染 = 既有页零回归）；复用既有 :row-key -->
+      <el-table-column v-if="selectable" type="selection" width="48" />
+
       <el-table-column
         v-for="col in config.columns"
         :key="col.prop"

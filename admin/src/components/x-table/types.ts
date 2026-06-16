@@ -7,6 +7,7 @@
  * | @date      2026-06-08 16:00:00
  * | @updated   2026-06-09 14:30:00  T-007c：只读模式 + 行操作配置 + 列筛选/排序
  * | @updated   2026-06-12 14:24:57  T-007h：表单字段插槽(type:'slot') + api.get 编辑回填详情 + delConfirm 文案覆写
+ * | @updated   2026-06-16 11:26:18  T-011a：selectable 多选开关（gated 可选扩展，缺省 false 零回归）
  * +----------------------------------------------------------------------
  */
 import type { Component } from 'vue'
@@ -107,6 +108,15 @@ export interface XTableConfig<T extends XRow = XRow> {
   permPrefix?: string
   /** 只读模式：关闭内置新增/编辑/删除，仅保留列表+分页+搜索+自定义行操作。 */
   readonly?: boolean
+  /**
+   * 多选模式：开启后表格前插选择列（el-table type=selection），选中行经 @selection-change
+   * 收集到内部 selectedRows，并经 defineExpose 暴露 selectedRows + clearSelection 供消费页读取/重置；
+   * 同时启用 #batch-actions 作用域插槽（slot props: { selected, clear }）放批量操作按钮。
+   * 缺省 undefined/false → 不渲染选择列、不暴露批量槽 = 既有页零回归。
+   * v1 仅页内多选：翻页/筛选/刷新清空选中（el-table 默认，未启用 reserve-selection）。
+   * 多选纯前端选中能力、不放宽任何权限；批量操作的鉴权由后端端点把关（前端不做伪批量/伪安全）。
+   */
+  selectable?: boolean
   /** 自定义行操作列表（与内置编辑/删除并存；只读模式下为唯一行操作来源）。 */
   actions?: XAction[]
   /** 内置删除的二次确认文案覆写（按各资源后端真实删除行为措辞破坏性后果）；缺省 i18n 通用文案。 */
