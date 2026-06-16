@@ -67,8 +67,8 @@ gcm:
   key_b64: ""              # openssl rand -base64 32 → 解码须 32 字节（配置加密用）
 
 file:
-  max_size_bytes: 10485760
-  allowed_exts: ["jpg","jpeg","png","gif","pdf","docx","xlsx","zip","txt"]
+  max_size_bytes: 104857600   # 100MB（T-011c：抬高以便验收 >50MB 大视频预览降级路径）
+  allowed_exts: ["jpg","jpeg","png","gif","pdf","docx","xlsx","zip","txt","mp4","webm","mov","mp3","wav","ogg","m4a"]
   local:
     root_dir: "./uploads"
     url_prefix: "/sys/files/"
