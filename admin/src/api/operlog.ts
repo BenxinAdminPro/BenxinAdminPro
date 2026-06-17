@@ -5,6 +5,7 @@
  * | @author    仗键天涯(daxing)
  * | @email     3442535897@qq.com
  * | @date      2026-06-10 12:02:21
+ * | @updated   2026-06-17 00:00:00  T-014：删 OperLogRow.operator（后端 json tag 改 "-" 收口，前端只消费 operator_name）
  * +----------------------------------------------------------------------
  */
 import { http } from '@/request'
@@ -18,8 +19,7 @@ import type { PageResult } from '@/request/types'
  */
 export interface OperLogRow extends Record<string, unknown> {
   id: string
-  operator: string // 内部用户 ID 字符串（采集原值，不直接展示）
-  operator_name: string // T-005b-4：后端 JOIN 解析的用户名（已注销→「已注销」、空→「匿名」）
+  operator_name: string // 后端 JOIN 解析的用户名（已注销→「已注销」、空→「匿名」）。T-014：raw operator 已收口，前端仅消费此名
   method: string
   path: string
   perm_code: string

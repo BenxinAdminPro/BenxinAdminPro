@@ -63,7 +63,12 @@ info:
             id=hashid），并把 dict types/data、configs、oper/login 日志、files 的 list 响应（data=PageResult
             且 list 项 typed）与 createDictType/createConfig/uploadFile 的实体响应由裸 ApiResponse 接成 typed。
             纯 spec + 出参收口，零新增请求/路径/状态码/错误码段/DDL。
-  version: "0.16.0"
+    v0.17.0: 出参纪律收口批 II（T-014）。③ SysFile 去 uploader、SysOperLog 去 operator（两处「JWT subject
+            内部用户 ID 串」收口，对应 model_file.go/model.go 两 json tag 改 '-'；保留 uploader_name/operator_name
+            展示路径，JOIN 走 DB 列不经 JSON 不受影响；model-tag drop 一处覆盖全部出参路径 list/upload/detail）。
+            ① 补全自始缺失的 POST /sys/dict/data（createDictData，handler 早注册返实体，本版补 spec：入参
+            dict_type/label/value 必填 + sort/status，data=SysDictData）。零新增错误码段/DDL/权限码（复用 sys:dict:create）。
+  version: "0.17.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -334,8 +339,7 @@ components:
         size: { type: integer, format: int64 }
         mime: { type: string }
         ext: { type: string }
-        uploader: { type: string, description: "采集的 JWT subject(内部用户 ID 字符串)，不直接展示" }
-        uploader_name: { type: string, description: "T-005b-4：JOIN 解析用户名（已注销→「已注销」、空→「匿名」）" }
+        uploader_name: { type: string, description: "T-005b-4：JOIN 解析用户名（已注销→「已注销」、空→「匿名」）。T-014：raw uploader(内部用户 ID 串)已收口，仅此展示名出参" }
         status: { type: integer, description: "0=正常 1=待清理" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -344,8 +348,7 @@ components:
       type: object
       properties:
         id: { type: string, description: "对外 ID(hashid 字符串)" }
-        operator: { type: string, description: "采集的 JWT subject(内部用户 ID 字符串)" }
-        operator_name: { type: string, description: "T-005b-4：JOIN 解析用户名（已注销→「已注销」、空→「匿名」）" }
+        operator_name: { type: string, description: "T-005b-4：JOIN 解析用户名（已注销→「已注销」、空→「匿名」）。T-014：raw operator(内部用户 ID 串)已收口，仅此展示名出参" }
         method: { type: string }
         path: { type: string }
         perm_code: { type: string }
@@ -1214,6 +1217,36 @@ paths:
                           - type: object
                             properties:
                               list: { type: array, items: { $ref: "#/components/schemas/SysDictData" } }
+    post:
+      tags: [System]
+      summary: 新建字典项
+      description: "T-014：补全自始缺失的 openapi path 定义（handler.go CreateDictData 早注册、返实体）；权限 sys:dict:create。"
+      operationId: createDictData
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dict_type, label, value]
+              properties:
+                dict_type: { type: string }
+                label: { type: string }
+                value: { type: string }
+                sort: { type: integer }
+                status: { type: integer }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/SysDictData" }
 
   /sys/dict/data/{id}:
     put:

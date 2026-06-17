@@ -81,14 +81,40 @@ func TestResponseEncoderPreservesMaskedValue(t *testing.T) {
 func TestResponseEncoderFileNoStorageKey(t *testing.T) {
 	h := newHasher(t)
 	enc := NewResponseEncoder(h)
-	f := SysFile{ID: 5, OriginalName: "a.png", StorageKey: "2026/06/17/uuid.png", Mime: "image/png"}
+	f := SysFile{ID: 5, OriginalName: "a.png", StorageKey: "2026/06/17/uuid.png", Mime: "image/png", Uploader: "1", UploaderName: "admin"}
 	m := enc.Item(&f)
 	if _, leaked := m["storage_key"]; leaked {
 		t.Errorf("file 出参不应含 storage_key（收口，T-013），got %#v", m)
 	}
+	// T-014 双向锁：raw uploader 已收口、但展示名 uploader_name 仍在（防误删展示字段）。
+	// fixture 设了 Uploader:"1"，若 json tag 被改回 "uploader" 此断言会 FAIL。
+	if _, leaked := m["uploader"]; leaked {
+		t.Errorf("file 出参不应含 uploader（内部用户 ID 串收口，T-014），got %#v", m)
+	}
+	if m["uploader_name"] != "admin" {
+		t.Errorf("uploader_name 展示路径应保留（误删即 FAIL），got %#v", m["uploader_name"])
+	}
 	// 零回归：其余字段仍在、id 仍 hashid。
 	if m["original_name"] != "a.png" {
 		t.Errorf("非收口字段应原样保留，got %#v", m)
+	}
+	if _, isStr := m["id"].(string); !isStr {
+		t.Error("id 应被编码为 hashid 字符串")
+	}
+}
+
+// T-014 收口负向断言（双向锁）：SysOperLog 出参不应含 operator（内部用户 ID 串），但 operator_name 展示名仍在。
+// fixture 设了 Operator，若 json tag 被改回 "operator" 此断言会 FAIL —— 本该早拦住泄漏。
+func TestResponseEncoderOperLogNoOperator(t *testing.T) {
+	h := newHasher(t)
+	enc := NewResponseEncoder(h)
+	e := SysOperLog{ID: 9, Operator: "1", OperatorName: "admin", Method: "POST", Path: "/sys/users"}
+	m := enc.Item(&e)
+	if _, leaked := m["operator"]; leaked {
+		t.Errorf("operlog 出参不应含 operator（内部用户 ID 串收口，T-014），got %#v", m)
+	}
+	if m["operator_name"] != "admin" {
+		t.Errorf("operator_name 展示路径应保留（误删即 FAIL），got %#v", m["operator_name"])
 	}
 	if _, isStr := m["id"].(string); !isStr {
 		t.Error("id 应被编码为 hashid 字符串")

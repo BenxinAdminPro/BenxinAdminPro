@@ -6,6 +6,7 @@
 // | @date      2026-06-08 01:18:00
 // | @updated   2026-06-14 10:35:00  T-005b-4：SysFile 加非持久化 UploaderName（上传人可读化出参）
 // | @updated   2026-06-17 00:00:00  T-013：StorageKey json tag 改 "-"（相对存储 key 不外露；DB 列/内部 Go 字段使用原样）
+// | @updated   2026-06-17 00:00:00  T-014：Uploader json tag 改 "-"（内部用户 ID 串不外露；保留 uploader_name 展示路径）
 // +----------------------------------------------------------------------
 
 package system
@@ -25,7 +26,7 @@ type SysFile struct {
 	Size         int64          `gorm:"type:bigint" json:"size"`
 	Mime         string         `gorm:"type:varchar(128)" json:"mime"`
 	Ext          string         `gorm:"type:varchar(32)" json:"ext"`
-	Uploader     string         `gorm:"type:varchar(64)" json:"uploader"`
+	Uploader     string         `gorm:"type:varchar(64)" json:"-"` // T-014：内部用户 ID 串不外露（UploaderName 走展示路径）
 	Status       int8           `gorm:"type:tinyint;default:0" json:"status"` // 0=正常 1=待清理
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`

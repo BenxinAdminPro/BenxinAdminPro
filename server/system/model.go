@@ -6,6 +6,7 @@
 // | @date      2026-06-08 00:10:00
 // | @updated   2026-06-08 03:04:00
 // | @updated   2026-06-14 10:35:00  T-005b-4：SysOperLog 加非持久化 OperatorName（操作人可读化出参）
+// | @updated   2026-06-17 00:00:00  T-014：SysOperLog.Operator json tag 改 "-"（内部用户 ID 串不外露；保留 operator_name 展示路径）
 // +----------------------------------------------------------------------
 
 package system
@@ -77,7 +78,7 @@ type SysMigration struct {
 // SysOperLog 操作日志。
 type SysOperLog struct {
 	ID         uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	Operator   string    `gorm:"type:varchar(64)" json:"operator"`
+	Operator   string    `gorm:"type:varchar(64)" json:"-"` // T-014：内部用户 ID 串不外露（OperatorName 走展示路径）
 	Method     string    `gorm:"type:varchar(8)" json:"method"`
 	Path       string    `gorm:"type:varchar(255)" json:"path"`
 	PermCode   string    `gorm:"type:varchar(128)" json:"perm_code"`
