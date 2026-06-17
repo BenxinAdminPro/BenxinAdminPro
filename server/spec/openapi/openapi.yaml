@@ -55,7 +55,15 @@ info:
             搭车补回：T-009b 的菜单专属父节点错误码 ErrInvalidParentMenu（RBAC offset 47 /
             sys.invalid_parent_menu，Go 常量 T-009b 已落并在用）原计划 0.14.1 但从未落入 openapi.yaml
             （c9db3a9 diff 未含本文件），本版于错误码段说明中一并物化；纯文档补全、无 Go 行为/端点/schema 变更。
-  version: "0.15.0"
+    v0.16.0: 对外出参纪律收口（T-013）。① 删 SysDept/SysMenu 的 ancestors 字段（裸内部 ID 串收口，
+            对应删 rbac/response.go 两处编码行；DB 列/防环逻辑/子树同步原样不动，覆盖 /sys/depts/tree、
+            /sys/menus/tree、/sys/auth/menus）。② SysFile 去 storage_key（model StorageKey json tag 改 '-'；
+            相对存储 key 不外露，内部 Go 字段读写/下载/批删原样）。③ system 出参强类型化：新增 6 component
+            schema（SysDictType/SysDictData/SysConfig/SysFile/SysOperLog/SysLoginLog，字段逐字对齐 model、
+            id=hashid），并把 dict types/data、configs、oper/login 日志、files 的 list 响应（data=PageResult
+            且 list 项 typed）与 createDictType/createConfig/uploadFile 的实体响应由裸 ApiResponse 接成 typed。
+            纯 spec + 出参收口，零新增请求/路径/状态码/错误码段/DDL。
+  version: "0.16.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -226,7 +234,6 @@ components:
       properties:
         id: { type: string, description: "对外 ID(hashid 字符串)" }
         parent_id: { type: string, description: "父级对外 ID(hashid)，空=根" }
-        ancestors: { type: string }
         name: { type: string }
         sort: { type: integer }
         leader: { type: string }
@@ -268,7 +275,6 @@ components:
       properties:
         id: { type: string, description: "对外 ID(hashid 字符串)" }
         parent_id: { type: string, description: "父级对外 ID(hashid)，空=根" }
-        ancestors: { type: string }
         menu_type: { type: string, enum: [M, C, F] }
         name: { type: string }
         perm_code: { type: string }
@@ -281,6 +287,85 @@ components:
         children:
           type: array
           items: { $ref: "#/components/schemas/SysMenu" }
+
+    # --- T-013 system 实体出参强类型化（字段以 server/system model 为准；id 一律 hashid 字符串）---
+    SysDictType:
+      type: object
+      properties:
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
+        dict_type: { type: string }
+        name: { type: string }
+        status: { type: integer }
+        remark: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SysDictData:
+      type: object
+      properties:
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
+        dict_type: { type: string }
+        label: { type: string }
+        value: { type: string }
+        sort: { type: integer }
+        status: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SysConfig:
+      type: object
+      properties:
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
+        config_key: { type: string }
+        config_value: { type: string, description: "加密行(is_encrypted=1)出参恒脱敏为 ******；明文行返原值" }
+        name: { type: string }
+        remark: { type: string }
+        is_encrypted: { type: integer, enum: [0, 1], description: "0=明文 1=GCM 加密落库" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SysFile:
+      type: object
+      description: "T-013：无 storage_key（相对存储 key 不外露，model StorageKey json tag 改 '-'）"
+      properties:
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
+        original_name: { type: string }
+        storage_type: { type: string }
+        size: { type: integer, format: int64 }
+        mime: { type: string }
+        ext: { type: string }
+        uploader: { type: string, description: "采集的 JWT subject(内部用户 ID 字符串)，不直接展示" }
+        uploader_name: { type: string, description: "T-005b-4：JOIN 解析用户名（已注销→「已注销」、空→「匿名」）" }
+        status: { type: integer, description: "0=正常 1=待清理" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SysOperLog:
+      type: object
+      properties:
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
+        operator: { type: string, description: "采集的 JWT subject(内部用户 ID 字符串)" }
+        operator_name: { type: string, description: "T-005b-4：JOIN 解析用户名（已注销→「已注销」、空→「匿名」）" }
+        method: { type: string }
+        path: { type: string }
+        perm_code: { type: string }
+        ip: { type: string }
+        user_agent: { type: string }
+        req_summary: { type: string }
+        result_code: { type: integer }
+        latency_ms: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    SysLoginLog:
+      type: object
+      properties:
+        id: { type: string, description: "对外 ID(hashid 字符串)" }
+        username: { type: string }
+        ip: { type: string }
+        user_agent: { type: string }
+        success: { type: integer, description: "0=失败 1=成功" }
+        reason: { type: string }
+        created_at: { type: string, format: date-time }
 
     PageResult:
       type: object
@@ -1024,7 +1109,17 @@ paths:
           description: 成功
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ApiResponse" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              list: { type: array, items: { $ref: "#/components/schemas/SysDictType" } }
     post:
       tags: [System]
       summary: 新建字典类型
@@ -1046,7 +1141,12 @@ paths:
           description: 成功
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ApiResponse" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/SysDictType" }
 
   /sys/dict/types/{id}:
     put:
@@ -1103,7 +1203,17 @@ paths:
           description: "成功（T-005b-4 起为分页包络，非裸数组）"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ApiResponse" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              list: { type: array, items: { $ref: "#/components/schemas/SysDictData" } }
 
   /sys/dict/data/{id}:
     put:
@@ -1164,7 +1274,17 @@ paths:
           description: 成功
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ApiResponse" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              list: { type: array, items: { $ref: "#/components/schemas/SysConfig" } }
     post:
       tags: [System]
       summary: 新建参数
@@ -1193,7 +1313,12 @@ paths:
           description: 成功
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ApiResponse" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/SysConfig" }
 
   /sys/configs/{id}:
     put:
@@ -1262,7 +1387,17 @@ paths:
           description: 成功
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ApiResponse" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              list: { type: array, items: { $ref: "#/components/schemas/SysOperLog" } }
         "400":
           description: 时间范围参数非法或 start>end
     delete:
@@ -1299,7 +1434,17 @@ paths:
           description: 成功
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ApiResponse" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              list: { type: array, items: { $ref: "#/components/schemas/SysLoginLog" } }
         "400":
           description: 时间范围参数非法或 start>end
     delete:
@@ -1336,7 +1481,12 @@ paths:
           description: 上传成功
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ApiResponse" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/SysFile" }
         "413":
           description: 文件过大
         "415":
@@ -1360,7 +1510,17 @@ paths:
           description: 成功
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ApiResponse" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              list: { type: array, items: { $ref: "#/components/schemas/SysFile" } }
 
   /sys/files/batch-delete:
     post:

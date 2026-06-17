@@ -76,6 +76,25 @@ func TestResponseEncoderPreservesMaskedValue(t *testing.T) {
 	}
 }
 
+// T-013 收口负向断言：SysFile 出参不应含 storage_key（相对存储 key 收口，json tag 改 "-"）。
+// fixture 设了 StorageKey，若 json tag 被改回 "storage_key" 此断言会 FAIL —— 本该早拦住泄漏。
+func TestResponseEncoderFileNoStorageKey(t *testing.T) {
+	h := newHasher(t)
+	enc := NewResponseEncoder(h)
+	f := SysFile{ID: 5, OriginalName: "a.png", StorageKey: "2026/06/17/uuid.png", Mime: "image/png"}
+	m := enc.Item(&f)
+	if _, leaked := m["storage_key"]; leaked {
+		t.Errorf("file 出参不应含 storage_key（收口，T-013），got %#v", m)
+	}
+	// 零回归：其余字段仍在、id 仍 hashid。
+	if m["original_name"] != "a.png" {
+		t.Errorf("非收口字段应原样保留，got %#v", m)
+	}
+	if _, isStr := m["id"].(string); !isStr {
+		t.Error("id 应被编码为 hashid 字符串")
+	}
+}
+
 // Page 编码：list 内每个 item 的 id 均为 hashid，整体无裸 id。
 func TestResponseEncoderPageNoBareID(t *testing.T) {
 	h := newHasher(t)

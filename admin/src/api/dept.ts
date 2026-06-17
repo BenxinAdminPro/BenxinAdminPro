@@ -6,6 +6,7 @@
  * | @email     3442535897@qq.com
  * | @date      2026-06-12 14:24:57
  * | @updated   2026-06-16 21:20:34  T-012：补 create/update/remove + DeptPayload（部门管理页 CRUD/移动消费）
+ * | @updated   2026-06-17 00:00:00  T-013：删 DeptNode.ancestors（后端出参已收口，前端从不消费裸内部 ID 串）
  * +----------------------------------------------------------------------
  *
  * 后端（rbac/handler_dept.go + dept_service.go）：
@@ -24,7 +25,6 @@ import { http } from '@/request'
 export interface DeptNode extends Record<string, unknown> {
   id: string
   parent_id: string | null
-  ancestors: string
   name: string
   sort: number
   leader: string

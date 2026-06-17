@@ -99,6 +99,11 @@ func TestResponseEncoder_Dept(t *testing.T) {
 	if !ok || pid == "" {
 		t.Error("dept parent_id should be hashid string")
 	}
+	// T-013 收口负向断言：ancestors（裸内部 ID 串）不应出现在出参（本测试 fixture 设了 Ancestors:"0,1"，
+	// 若编码器重新输出 ancestors 此断言会 FAIL —— 一个本该早拦住泄漏的测试）。
+	if _, leaked := resp["ancestors"]; leaked {
+		t.Error("dept 出参不应含 ancestors（裸内部 ID 串收口，T-013）")
+	}
 }
 
 func TestResponseEncoder_DeptTree(t *testing.T) {
@@ -123,11 +128,16 @@ func TestResponseEncoder_Role(t *testing.T) {
 
 func TestResponseEncoder_Menu(t *testing.T) {
 	enc := testEncoder(t)
-	menu := &SysMenu{ID: 15, ParentID: 3, MenuType: "F", Name: "查看", PermCode: "sys:user:list"}
+	menu := &SysMenu{ID: 15, ParentID: 3, MenuType: "F", Name: "查看", PermCode: "sys:user:list", Ancestors: "0,1,3"}
 
 	resp := enc.Menu(menu)
 	data, _ := json.Marshal(resp)
 	assertNoBareIntID(t, data)
+	// T-013 收口负向断言：ancestors 不应出现在出参（fixture 设了 Ancestors:"0,1,3"，覆盖 /sys/menus/tree 与
+	// /sys/auth/menus 两端点共用的 Menu 编码器；重新输出即 FAIL）。
+	if _, leaked := resp["ancestors"]; leaked {
+		t.Error("menu 出参不应含 ancestors（裸内部 ID 串收口，T-013）")
+	}
 }
 
 func TestResponseEncoder_PostList(t *testing.T) {

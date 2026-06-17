@@ -5,6 +5,7 @@
  * | @author    仗键天涯(daxing)
  * | @email     3442535897@qq.com
  * | @date      2026-06-12 10:51:19
+ * | @updated   2026-06-17 00:00:00  T-013：删 MenuRow.ancestors（后端出参已收口，前端从不消费裸内部 ID 串）
  * +----------------------------------------------------------------------
  *
  * 后端（rbac/handler_menu.go）：
@@ -15,11 +16,10 @@
  */
 import { http } from '@/request'
 
-/** 菜单管理行（含 ancestors；与 /sys/auth/menus 的 MenuNode 形状一致但用途不同——这里是管理全量树）。 */
+/** 菜单管理行（与 /sys/auth/menus 的 MenuNode 形状一致但用途不同——这里是管理全量树）。 */
 export interface MenuRow extends Record<string, unknown> {
   id: string
   parent_id: string | null
-  ancestors: string
   menu_type: 'M' | 'C' | 'F'
   name: string
   perm_code: string

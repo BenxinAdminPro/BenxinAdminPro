@@ -7,6 +7,7 @@
 // | @updated   2026-06-07 23:42:00
 // | @updated   2026-06-14 15:30:00  T-008b：User 出参加 roles（详情预载时输出，列表 omitempty 不污染）
 // | @updated   2026-06-14 18:10:00  T-008c：Role 出参加 menu_ids（详情预载 hashid 数组，授权树回填来源）
+// | @updated   2026-06-17 00:00:00  T-013：删 Dept/Menu 出参 ancestors（裸内部 ID 串收口，列与防环逻辑原样不动）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -79,7 +80,6 @@ func (e *ResponseEncoder) Dept(d *SysDept) gin.H {
 	resp := gin.H{
 		"id":         e.H.Encode(d.ID),
 		"parent_id":  e.encodeOrZero(d.ParentID),
-		"ancestors":  d.Ancestors,
 		"name":       d.Name,
 		"sort":       d.Sort,
 		"leader":     d.Leader,
@@ -175,7 +175,6 @@ func (e *ResponseEncoder) Menu(m *SysMenu) gin.H {
 	resp := gin.H{
 		"id":         e.H.Encode(m.ID),
 		"parent_id":  e.encodeOrZero(m.ParentID),
-		"ancestors":  m.Ancestors,
 		"menu_type":  m.MenuType,
 		"name":       m.Name,
 		"perm_code":  m.PermCode,

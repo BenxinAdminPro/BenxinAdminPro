@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 01:18:00
 // | @updated   2026-06-14 10:35:00  T-005b-4：SysFile 加非持久化 UploaderName（上传人可读化出参）
+// | @updated   2026-06-17 00:00:00  T-013：StorageKey json tag 改 "-"（相对存储 key 不外露；DB 列/内部 Go 字段使用原样）
 // +----------------------------------------------------------------------
 
 package system
@@ -19,7 +20,7 @@ import (
 type SysFile struct {
 	ID           uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
 	OriginalName string         `gorm:"type:varchar(255);not null" json:"original_name"`
-	StorageKey   string         `gorm:"type:varchar(512);not null" json:"storage_key"`
+	StorageKey   string         `gorm:"type:varchar(512);not null" json:"-"` // T-013：相对存储 key 不外露（内部 Go 字段读写原样）
 	StorageType  string         `gorm:"type:varchar(32);not null;default:'local'" json:"storage_type"`
 	Size         int64          `gorm:"type:bigint" json:"size"`
 	Mime         string         `gorm:"type:varchar(128)" json:"mime"`

@@ -6,6 +6,7 @@
  * | @email     3442535897@qq.com
  * | @date      2026-06-10 17:19:28
  * | @updated   2026-06-16 15:40:00  T-011c：fetchFileBlob 鉴权取流（预览/下载共用）+ batchDeleteFiles 批量软删 + listFiles 透传 mime_category
+ * | @updated   2026-06-17 00:00:00  T-013：删 SysFileRow.storage_key（后端 json tag 改 "-" 收口，前端从不展示相对存储 key）
  * +----------------------------------------------------------------------
  */
 import { http } from '@/request'
@@ -13,14 +14,13 @@ import type { PageResult } from '@/request/types'
 
 /**
  * 文件元信息行（id 为 hashid 字符串）。
- * storage_key 为相对存储 key（yyyy/MM/dd/uuid.ext），随列表返回但页面不展示（最小暴露）。
+ * T-013：storage_key（相对存储 key）已在后端收口（json tag 改 "-"），不再随出参返回、前端不再声明。
  * uploader 为后端采集的 JWT subject（内部用户 ID 字符串，不直接展示）；
  * T-005b-4 起后端随列表返回 uploader_name（JOIN 解析的用户名），前端显示该字段。
  */
 export interface SysFileRow extends Record<string, unknown> {
   id: string
   original_name: string
-  storage_key: string
   storage_type: string
   size: number
   mime: string
