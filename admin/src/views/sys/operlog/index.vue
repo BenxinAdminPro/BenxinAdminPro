@@ -22,10 +22,10 @@ import { Delete } from '@element-plus/icons-vue'
 import XTable from '@/components/x-table/XTable.vue'
 import type { XTableConfig, XRow } from '@/components/x-table/types'
 import { listOperLogs, cleanOperLogs, type OperLogRow } from '@/api/operlog'
+import { dateText } from '@/utils/format'
 
 const tableRef = ref<InstanceType<typeof XTable>>()
 
-const dateText = (v: unknown) => (typeof v === 'string' ? v.slice(0, 19).replace('T', ' ') : '')
 const resultText = (v: unknown) => (Number(v) === 0 ? '成功' : String(v))
 
 const config: XTableConfig = {

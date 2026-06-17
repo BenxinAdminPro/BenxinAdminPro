@@ -34,6 +34,7 @@ import {
   batchDeleteFiles,
   type SysFileRow,
 } from '@/api/file'
+import { dateText } from '@/utils/format'
 
 const tableRef = ref<InstanceType<typeof XTable>>()
 
@@ -65,8 +66,6 @@ function mimeCategoryOf(mime: unknown): 'image' | 'video' | 'audio' | 'other' {
 
 // 仅 image/video/audio 行可预览（other 如 txt/pdf 无预览，仅下载）
 const canPreview = (row: XRow): boolean => ['image', 'video', 'audio'].includes(mimeCategoryOf(row.mime))
-
-const dateText = (v: unknown) => (typeof v === 'string' ? v.slice(0, 19).replace('T', ' ') : '')
 
 // 字节数 → 可读大小
 function sizeText(v: unknown): string {

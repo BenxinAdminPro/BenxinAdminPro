@@ -16,9 +16,7 @@
 import XTable from '@/components/x-table/XTable.vue'
 import type { XTableConfig } from '@/components/x-table/types'
 import { listPosts, createPost, updatePost, removePost } from '@/api/post'
-
-const statusText = (v: unknown) => (Number(v) === 0 ? '正常' : '停用')
-const dateText = (v: unknown) => (typeof v === 'string' ? v.slice(0, 19).replace('T', ' ') : '')
+import { statusText, dateText } from '@/utils/format'
 
 const config: XTableConfig = {
   permPrefix: 'sys:post',

@@ -33,9 +33,7 @@ import {
   type DeptPayload,
 } from '@/api/dept'
 import { buildTree, flattenTree, subtreeIds } from '@/utils/tree'
-
-// 创建时间格式化：ISO（2026-06-08T16:16:33+08:00）→ 2026-06-08 16:16:33（镜像 post/index.vue:21 逐字相同）
-const dateText = (v: unknown) => (typeof v === 'string' ? v.slice(0, 19).replace('T', ' ') : '')
+import { dateText, statusText } from '@/utils/format'
 
 // ---- 树数据（直接消费后端嵌套树）----
 const loading = ref(false)
@@ -191,7 +189,7 @@ onMounted(fetchTree)
       <el-table-column prop="leader" label="负责人" min-width="120" show-overflow-tooltip />
       <el-table-column prop="sort" label="排序" width="80" align="center" />
       <el-table-column label="状态" width="80" align="center">
-        <template #default="{ row }">{{ row.status === 0 ? '正常' : '停用' }}</template>
+        <template #default="{ row }">{{ statusText(row.status) }}</template>
       </el-table-column>
       <el-table-column label="创建时间" min-width="170" show-overflow-tooltip>
         <template #default="{ row }">{{ dateText(row.created_at) }}</template>

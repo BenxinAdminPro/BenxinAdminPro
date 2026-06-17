@@ -22,6 +22,7 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { Plus, Sort } from '@element-plus/icons-vue'
 import { getMenuTree, createMenu, updateMenu, removeMenu, type MenuRow, type MenuPayload } from '@/api/menu'
 import { buildTree, flattenTree, subtreeIds } from '@/utils/tree'
+import { statusText } from '@/utils/format'
 
 // ---- 树数据（直接消费后端嵌套树）----
 const loading = ref(false)
@@ -231,7 +232,7 @@ onMounted(fetchTree)
         </template>
       </el-table-column>
       <el-table-column label="状态" width="70" align="center">
-        <template #default="{ row }">{{ row.status === 0 ? '正常' : '停用' }}</template>
+        <template #default="{ row }">{{ statusText(row.status) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="210" fixed="right">
         <template #default="{ row }">

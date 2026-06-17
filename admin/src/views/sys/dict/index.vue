@@ -28,9 +28,7 @@ import {
   removeDictData,
   type DictTypeRow,
 } from '@/api/dict'
-
-const statusText = (v: unknown) => (Number(v) === 0 ? '正常' : '停用')
-const dateText = (v: unknown) => (typeof v === 'string' ? v.slice(0, 19).replace('T', ' ') : '')
+import { statusText, dateText } from '@/utils/format'
 
 const statusOptions = [
   { label: '正常', value: 0 },

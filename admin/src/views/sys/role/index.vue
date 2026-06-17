@@ -27,10 +27,10 @@ import XTable from '@/components/x-table/XTable.vue'
 import type { XTableConfig, XRow } from '@/components/x-table/types'
 import { listRoles, createRole, updateRole, removeRole, getRole, assignRoleMenus } from '@/api/role'
 import { getMenuTree, type MenuRow } from '@/api/menu'
+import { statusText } from '@/utils/format'
 
 const scopeMap: Record<number, string> = { 1: '全部', 2: '本人', 3: '本部门' }
 const scopeText = (v: unknown) => scopeMap[Number(v)] || '本人'
-const statusText = (v: unknown) => (Number(v) === 0 ? '正常' : '停用')
 
 // ---- 分配菜单授权树弹窗（页级控件；check-strictly 独立勾选 + 全量覆写）----
 const menuVisible = ref(false)

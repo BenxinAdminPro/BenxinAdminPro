@@ -35,9 +35,7 @@ import {
   resetUserPassword, setUserStatus, assignUserRoles,
 } from '@/api/user'
 import { listAllRoles, type RoleRow } from '@/api/role'
-
-const statusText = (v: unknown) => (Number(v) === 0 ? '正常' : '停用')
-const dateText = (v: unknown) => (typeof v === 'string' ? v.slice(0, 19).replace('T', ' ') : '')
+import { statusText, dateText } from '@/utils/format'
 // 角色列：roles 数组 → 角色名顿号分隔；无角色显「—」。
 const rolesText = (v: unknown) => {
   const rs = Array.isArray(v) ? (v as RoleRow[]) : []
