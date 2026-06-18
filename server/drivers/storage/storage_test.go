@@ -183,11 +183,35 @@ func TestUploadConfig_ValidateExt(t *testing.T) {
 }
 
 func TestValidateContentType(t *testing.T) {
-	if err := ValidateContentType("image/jpeg", "jpg"); err != nil {
-		t.Errorf("jpeg/jpg should match: %v", err)
+	tests := []struct {
+		name        string
+		contentType string
+		ext         string
+		shouldError bool
+	}{
+		// ---- pass：同大类 / alias / 兜底放行 ----
+		{"m4a alias audio/x-m4a", "audio/x-m4a", "m4a", false},
+		{"m4a canonical audio/mp4", "audio/mp4", "m4a", false},
+		{"mp3 audio/mpeg", "audio/mpeg", "mp3", false},
+		{"mov video/quicktime", "video/quicktime", "mov", false},
+		{"jpg image/jpeg (旧绿保持)", "image/jpeg", "jpg", false},
+		{"octet-stream 兜底 m4a", "application/octet-stream", "m4a", false},
+		{"octet-stream 兜底 zip", "application/octet-stream", "zip", false},
+		{"未知扩展名放行", "anything", "xyz", false},
+		{"空声明放行", "", "jpg", false},
+		// ---- reject：跨大类粗错配仍拦 ----
+		{"text/plain for jpg (旧用例保持红)", "text/plain", "jpg", true},
+		{"exe-as-jpg 粗错配", "application/x-msdownload", "jpg", true},
+		{"image vs audio 跨大类", "image/png", "mp3", true},
 	}
-	if err := ValidateContentType("text/plain", "jpg"); err == nil {
-		t.Error("text/plain for jpg should mismatch")
+	for _, tc := range tests {
+		err := ValidateContentType(tc.contentType, tc.ext)
+		if tc.shouldError && err == nil {
+			t.Errorf("%s: ValidateContentType(%q,%q) should error, got nil", tc.name, tc.contentType, tc.ext)
+		}
+		if !tc.shouldError && err != nil {
+			t.Errorf("%s: ValidateContentType(%q,%q) should pass, got %v", tc.name, tc.contentType, tc.ext, err)
+		}
 	}
 }
 

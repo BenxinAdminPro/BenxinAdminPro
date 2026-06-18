@@ -4,13 +4,13 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 01:14:00
+// | @updated   2026-06-18 08:51:21  T-016：Content-Type 交叉校验改确定性大类级（去 OS mime db 依赖 + alias 免疫）
 // +----------------------------------------------------------------------
 
 package storage
 
 import (
 	"fmt"
-	"mime"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -41,20 +41,65 @@ func (c UploadConfig) ValidateExt(ext string) error {
 	return fmt.Errorf("extension not allowed: %s", ext)
 }
 
-// ValidateContentType 校验 Content-Type 与扩展名一致性。
+// extCategory 是底座自持的「扩展名 → 顶层大类」确定性映射。
+//
+// 设计意图（T-016）：ValidateContentType 原先依赖 mime.TypeByExtension 读宿主机
+// OS MIME 数据库，macOS/Linux/最小化容器返回值不一致（甚至为空），导致同一上传
+// 在不同部署环境结果漂移，且裸子类型相等比较不认 audio/x-m4a 等合法 alias。
+// 此表把校验收敛到「顶层大类（category）级」，去 OS 依赖、对 alias 免疫。
+//
+// 该校验为「组织性非安全边界」（仅防跨大类粗暴错配，非安全闸）；表外扩展名走
+// 「未知放行」兜底（见 ValidateContentType），故无需穷举，仅覆盖底座默认白名单 +
+// 常见项即可。key 为小写无点扩展名，value 为顶层大类。
+var extCategory = map[string]string{
+	// image
+	"jpg":  "image", // image/jpeg
+	"jpeg": "image", // image/jpeg
+	"png":  "image", // image/png
+	"gif":  "image", // image/gif
+	// video
+	"mp4":  "video", // video/mp4
+	"webm": "video", // video/webm
+	"mov":  "video", // video/quicktime
+	// audio
+	"mp3": "audio", // audio/mpeg
+	"wav": "audio", // audio/wav, audio/x-wav
+	"ogg": "audio", // audio/ogg
+	"m4a": "audio", // audio/mp4, audio/x-m4a, audio/m4a（freedesktop alias）
+	// application
+	"pdf":  "application", // application/pdf
+	"docx": "application", // application/vnd.openxmlformats-officedocument.wordprocessingml.document
+	"xlsx": "application", // application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+	"zip":  "application", // application/zip
+	// text
+	"txt": "text", // text/plain
+}
+
+// ValidateContentType 校验 Content-Type 与扩展名在「顶层大类」层一致。
+//
+// 确定性比较（不依赖 OS mime db）：
+//   - 扩展名归一化后取期望大类；未知扩展名 → 放行（维持「未知不校验」既有契约）。
+//   - 声明类型为空 → 放行（无声明不强拦，沿用宽容口径）。
+//   - 声明类型为 application/octet-stream → 放行（浏览器通用兜底，非安全闸）。
+//   - 否则比较声明类型的顶层大类与期望大类，跨大类才拒绝。
 func ValidateContentType(contentType, ext string) error {
-	ext = strings.TrimPrefix(strings.ToLower(ext), ".")
-	expected := mime.TypeByExtension("." + ext)
-	if expected == "" {
-		return nil // 未知扩展名不做 MIME 校验
+	ext = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(ext)), ".")
+	wantCat, ok := extCategory[ext]
+	if !ok {
+		return nil // 未知扩展名不做大类校验
 	}
-	// 比较 MIME 主类型（忽略参数如 charset）
-	declaredMain := strings.Split(contentType, ";")[0]
-	expectedMain := strings.Split(expected, ";")[0]
-	if strings.TrimSpace(declaredMain) != strings.TrimSpace(expectedMain) {
-		return fmt.Errorf("content-type mismatch: declared %q, expected %q for .%s", contentType, expected, ext)
+	declared := strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0])
+	if declared == "" {
+		return nil // 无声明不强拦
 	}
-	return nil
+	if strings.EqualFold(declared, "application/octet-stream") {
+		return nil // 浏览器「不认识」的通用兜底，放行
+	}
+	gotCat := strings.SplitN(strings.ToLower(declared), "/", 2)[0]
+	if gotCat == wantCat {
+		return nil
+	}
+	return fmt.Errorf("content-type category mismatch: declared %q (category %q), expected category %q for .%s", declared, gotCat, wantCat, ext)
 }
 
 // SanitizeFilename 消毒文件名：
