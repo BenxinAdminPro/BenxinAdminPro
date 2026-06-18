@@ -9,6 +9,7 @@
 // | @updated   2026-06-09 16:09:17  T-004d：对外 ID hashid 化 — path :id 解码 + 出参 encoder（注入 idcodec hasher）
 // | @updated   2026-06-14 10:52:00  T-005b-4：dict/config/日志列表补查询参数（模糊/时间范围/排序）+ dict_data 真分页
 // | @updated   2026-06-15 10:30:00  T-005b-3：UpdateConfig 改绑 UpdateConfigInput（指针三态值字段）
+// | @updated   2026-06-18 13:50:56  T-017：UpdateDictType 改绑 UpdateDictTypeInput（dict_type 真禁改，后端物理不接受）
 // +----------------------------------------------------------------------
 
 package system
@@ -107,7 +108,7 @@ func (h *Handler) CreateDictType(c *gin.Context) {
 func (h *Handler) UpdateDictType(c *gin.Context) {
 	id, err := decodePathID(c, h.hasher, h.errs)
 	if err != nil { return }
-	var in CreateDictTypeInput
+	var in UpdateDictTypeInput
 	if err := c.ShouldBindJSON(&in); err != nil { response.BadReq(c); return }
 	if err := h.dictSvc.UpdateType(c.Request.Context(), id, in); err != nil { response.ErrResp(c, err); return }
 	response.OK(c, nil)

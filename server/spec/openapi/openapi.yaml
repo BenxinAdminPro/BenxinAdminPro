@@ -68,7 +68,12 @@ info:
             展示路径，JOIN 走 DB 列不经 JSON 不受影响；model-tag drop 一处覆盖全部出参路径 list/upload/detail）。
             ① 补全自始缺失的 POST /sys/dict/data（createDictData，handler 早注册返实体，本版补 spec：入参
             dict_type/label/value 必填 + sort/status，data=SysDictData）。零新增错误码段/DDL/权限码（复用 sys:dict:create）。
-  version: "0.17.0"
+    v0.18.0: dict_type 真禁改（T-017 项①）。PUT /sys/dict/types/{id} 请求体删 dict_type 属性
+            （改 required:[name]、补 remark），后端 UpdateDictTypeInput 物理不含 DictType——dict_type 为唯一键、
+            底座无级联，改名会孤儿化既有 sys_dict_data，故 update 不接受该字段（即便客户端传入也被忽略，
+            前端 editable:false 仅 UI 不渲染，此为后端真禁改收口）。仅此端点求真，未动其它 schema。
+            零新增错误码段/DDL/权限码（复用 sys:dict:update）。
+  version: "0.18.0"
   contact:
     name: 仗键天涯(daxing)
     email: 3442535897@qq.com
@@ -1164,10 +1169,13 @@ paths:
           application/json:
             schema:
               type: object
+              required: [name]
+              # dict_type 禁改：唯一键，底座无级联，改名会孤儿化既有 sys_dict_data。
+              # 后端 UpdateDictTypeInput 物理不含该字段（即便客户端传入也被忽略），故此处不列。
               properties:
-                dict_type: { type: string }
                 name: { type: string }
                 status: { type: integer }
+                remark: { type: string }
       responses:
         "200":
           description: 成功

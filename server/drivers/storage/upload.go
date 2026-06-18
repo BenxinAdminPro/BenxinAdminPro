@@ -5,6 +5,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 01:14:00
 // | @updated   2026-06-18 08:51:21  T-016：Content-Type 交叉校验改确定性大类级（去 OS mime db 依赖 + alias 免疫）
+// | @updated   2026-06-18 13:50:56  T-017：二义容器扩展名补充容忍表（ogg 容忍 audio|video，主表 extCategory 不动）
 // +----------------------------------------------------------------------
 
 package storage
@@ -75,6 +76,16 @@ var extCategory = map[string]string{
 	"txt": "text", // text/plain
 }
 
+// extExtraCategories 是「二义容器格式」的额外容忍大类表（T-017）。
+//
+// 部分容器扩展名在 audio/video 两大类间天然二义（如 ogg 既可装音频流亦可装视频流），
+// extCategory 只能取其一为「期望大类」，对另一合法大类会误拒（如 .ogg 被声明 video/ogg）。
+// 此表给这类扩展名登记「主表大类之外仍应放行」的额外大类，ValidateContentType 在主表
+// 大类相等之外再查此表。key 为小写无点扩展名，value 为额外容忍的顶层大类集合。
+var extExtraCategories = map[string]map[string]bool{
+	"ogg": {"video": true}, // extCategory 主表 ogg=audio，此处补容忍 video/ogg
+}
+
 // ValidateContentType 校验 Content-Type 与扩展名在「顶层大类」层一致。
 //
 // 确定性比较（不依赖 OS mime db）：
@@ -96,8 +107,8 @@ func ValidateContentType(contentType, ext string) error {
 		return nil // 浏览器「不认识」的通用兜底，放行
 	}
 	gotCat := strings.SplitN(strings.ToLower(declared), "/", 2)[0]
-	if gotCat == wantCat {
-		return nil
+	if gotCat == wantCat || extExtraCategories[ext][gotCat] {
+		return nil // 主表期望大类，或二义容器格式登记的额外容忍大类
 	}
 	return fmt.Errorf("content-type category mismatch: declared %q (category %q), expected category %q for .%s", declared, gotCat, wantCat, ext)
 }

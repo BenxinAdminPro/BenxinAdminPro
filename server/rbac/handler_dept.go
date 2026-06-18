@@ -9,6 +9,7 @@
 // | @updated   2026-06-08 02:40:00
 // | @updated   2026-06-08 13:00:00  T-003d：RegisterRoutes 注入 AuthzEnforcer，路由走真 enforce
 // | @updated   2026-06-09 10:40:13  T-003e：parent_id 入参收 hashid
+// | @updated   2026-06-18 13:50:56  T-017：构造器 hasher==nil fail-fast（panic）+ 删 enc==nil 裸出参退化分支（根除裸内部 ID/ancestors 泄漏面）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -33,12 +34,15 @@ type DeptHandler struct {
 	enc    *ResponseEncoder
 }
 
+// NewDeptHandler 构造部门 handler。hasher 为必备依赖：缺失则编码器无法装配，
+// 出参将退化为裸 marshal SysDept（泄漏裸内部 id/parent_id/ancestors）→ 故 hasher==nil
+// 直接 fail-fast panic（对齐 demo 装配 self-check 与 ConfigService 缺密钥不静默精神），
+// 把「静默泄漏」转为「装配即炸」的响亮编程错。
 func NewDeptHandler(svc *DeptService, errs *errcode.Registry, hasher *Hasher) *DeptHandler {
-	var enc *ResponseEncoder
-	if hasher != nil {
-		enc = NewResponseEncoder(hasher)
+	if hasher == nil {
+		panic("rbac: NewDeptHandler requires a non-nil hasher (nil would leak raw internal IDs via bare-marshal fallback)")
 	}
-	return &DeptHandler{svc: svc, errs: errs, hasher: hasher, enc: enc}
+	return &DeptHandler{svc: svc, errs: errs, hasher: hasher, enc: NewResponseEncoder(hasher)}
 }
 
 func (h *DeptHandler) RegisterRoutes(rg *gin.RouterGroup, authz *AuthzEnforcer) {
@@ -51,7 +55,7 @@ func (h *DeptHandler) RegisterRoutes(rg *gin.RouterGroup, authz *AuthzEnforcer) 
 func (h *DeptHandler) Tree(c *gin.Context) {
 	tree, err := h.svc.Tree(c.Request.Context())
 	if err != nil { response.ErrResp(c, err); return }
-	if h.enc != nil { response.OK(c, h.enc.DeptTree(tree)) } else { response.OK(c, tree) }
+	response.OK(c, h.enc.DeptTree(tree))
 }
 
 // --- 入参请求 DTO（parent_id 为 hashid 字符串，handler 边界解码）---
@@ -97,7 +101,7 @@ func (h *DeptHandler) Create(c *gin.Context) {
 	if err != nil { response.AbortErr(c, h.errs.ErrInvalidID.Code); return }
 	dept, err := h.svc.Create(c.Request.Context(), in)
 	if err != nil { response.ErrResp(c, err); return }
-	if h.enc != nil { response.OK(c, h.enc.Dept(dept)) } else { response.OK(c, dept) }
+	response.OK(c, h.enc.Dept(dept))
 }
 
 func (h *DeptHandler) Update(c *gin.Context) {

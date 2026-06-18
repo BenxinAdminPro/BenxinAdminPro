@@ -6,6 +6,7 @@
 // | @date      2026-06-07 21:25:00
 // | @updated   2026-06-07 22:50:00
 // | @updated   2026-06-08 02:40:00
+// | @updated   2026-06-18 13:50:56  T-017：构造器 hasher==nil fail-fast（panic）+ 删 Menus 端点 enc==nil 裸出参退化分支（根除 SysMenu 裸内部 ID/ancestors 泄漏面）
 // +----------------------------------------------------------------------
 
 package rbac
@@ -25,13 +26,14 @@ type AuthInfoHandler struct {
 	enc     *ResponseEncoder
 }
 
-// NewAuthInfoHandler 创建权限下发 handler。
+// NewAuthInfoHandler 创建权限下发 handler。hasher 为必备依赖：缺失则编码器无法装配，
+// Menus 出参将退化为裸 marshal SysMenu（泄漏裸内部 id/parent_id/ancestors）→ 故 hasher==nil
+// 直接 fail-fast panic（对齐 demo 装配 self-check 与 ConfigService 缺密钥不静默精神）。
 func NewAuthInfoHandler(menuSvc *MenuService, userSvc *UserService, hasher *Hasher) *AuthInfoHandler {
-	var enc *ResponseEncoder
-	if hasher != nil {
-		enc = NewResponseEncoder(hasher)
+	if hasher == nil {
+		panic("rbac: NewAuthInfoHandler requires a non-nil hasher (nil would leak raw internal IDs via bare-marshal fallback)")
 	}
-	return &AuthInfoHandler{menuSvc: menuSvc, userSvc: userSvc, enc: enc}
+	return &AuthInfoHandler{menuSvc: menuSvc, userSvc: userSvc, enc: NewResponseEncoder(hasher)}
 }
 
 // RegisterRoutes 注册权限下发路由（需 JWT 鉴权，无需额外权限码）。
@@ -52,7 +54,7 @@ func (h *AuthInfoHandler) Menus(c *gin.Context) {
 		response.ErrResp(c, err)
 		return
 	}
-	if h.enc != nil { response.OK(c, h.enc.MenuTree(tree)) } else { response.OK(c, tree) }
+	response.OK(c, h.enc.MenuTree(tree))
 }
 
 // Perms 返回当前用户权限码集合。

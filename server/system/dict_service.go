@@ -8,6 +8,7 @@
 // | @updated   2026-06-09 17:00:00  T-004e：唯一键冲突(1062)兜底转友好码（dict_type/config_key 防 500）
 // | @updated   2026-06-14 10:40:00  T-005b-4：dict/config 列表补关键字模糊 + 排序白名单；dict_data 真分页
 // | @updated   2026-06-15 10:30:00  T-005b-3：配置加密写链路 — Create 落密文 + Update 指针三态不破坏密文
+// | @updated   2026-06-18 13:50:56  T-017：dict_type 真禁改 — UpdateType 改读 UpdateDictTypeInput（不含 DictType），Updates map 删 dict_type 键
 // +----------------------------------------------------------------------
 
 package system
@@ -101,9 +102,19 @@ func (s *DictService) ListTypes(ctx context.Context, q DictTypeListQuery) ([]Sys
 	return list, total, nil
 }
 
-func (s *DictService) UpdateType(ctx context.Context, id uint64, in CreateDictTypeInput) error {
+// UpdateDictTypeInput 字典类型更新入参。
+// dict_type 为唯一键、禁改（底座无级联，改名会孤儿化既有 sys_dict_data）——故本结构
+// = CreateDictTypeInput 去掉 DictType，逐字段保留原 binding；前端 editable:false 仅 UI 不渲染，
+// 后端这里物理不接受 dict_type 才是真禁改（防 curl 绕过前端直改）。
+type UpdateDictTypeInput struct {
+	Name   string `json:"name" binding:"required"`
+	Status int8   `json:"status"`
+	Remark string `json:"remark"`
+}
+
+func (s *DictService) UpdateType(ctx context.Context, id uint64, in UpdateDictTypeInput) error {
 	result := s.db.WithContext(ctx).Model(&SysDictType{}).Where("id = ?", id).Updates(map[string]any{
-		"dict_type": in.DictType, "name": in.Name, "status": in.Status, "remark": in.Remark,
+		"name": in.Name, "status": in.Status, "remark": in.Remark,
 	})
 	if dberr.IsDuplicate(result.Error) {
 		return s.errs.ErrDictTypeExists

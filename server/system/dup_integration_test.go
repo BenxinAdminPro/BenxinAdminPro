@@ -4,6 +4,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-09 17:00:00
+// | @updated   2026-06-18 13:50:56  T-017：dict_type 禁改后移除 TestDupDictTypeUpdateRename_MySQL（改名撞键路径已不可达，同 config 先例）
 // +----------------------------------------------------------------------
 //
 // 运行方式：go test -tags=integration ./system/... -v -count=1 -run Dup
@@ -83,23 +84,10 @@ func assertDupCode(t *testing.T, err error, wantCode int, label string) {
 	}
 }
 
-// dict_type Update 改名撞已存在 type → backstop → ErrDictTypeExists（曾误返 404）。
-func TestDupDictTypeUpdateRename_MySQL(t *testing.T) {
-	db := setupDupSysMySQL(t)
-	reg, _ := errcode.NewRegistry(11000)
-	svc := NewDictService(db, reg)
-	ctx := context.Background()
-
-	if _, err := svc.CreateType(ctx, CreateDictTypeInput{DictType: "sex", Name: "性别"}); err != nil {
-		t.Fatalf("create A: %v", err)
-	}
-	b, err := svc.CreateType(ctx, CreateDictTypeInput{DictType: "status", Name: "状态"})
-	if err != nil {
-		t.Fatalf("create B: %v", err)
-	}
-	err = svc.UpdateType(ctx, b.ID, CreateDictTypeInput{DictType: "sex", Name: "状态改名撞 sex"})
-	assertDupCode(t, err, reg.ErrDictTypeExists.GetCode(), "dict_type update 改名撞键")
-}
+// 注：原 TestDupDictTypeUpdateRename_MySQL（dict_type Update 改名撞键 → ErrDictTypeExists）
+// 已随 T-017 移除——UpdateDictTypeInput 不再含 DictType（dict_type 唯一键禁改，底座无级联、
+// 改名会孤儿化既有 dict_data），改名场景按设计已不可能，该 backstop 路径对 dict_type 不再可达。
+// 与上方 config 改名锁定（T-005b-3）同范式。Create 侧友好码仍由 TestDupDictTypeSimpleCreate_MySQL 覆盖。
 
 // dict_type 简单重名（走预检）也应友好码。
 func TestDupDictTypeSimpleCreate_MySQL(t *testing.T) {

@@ -199,10 +199,14 @@ func TestValidateContentType(t *testing.T) {
 		{"octet-stream 兜底 zip", "application/octet-stream", "zip", false},
 		{"未知扩展名放行", "anything", "xyz", false},
 		{"空声明放行", "", "jpg", false},
+		// ---- T-017：ogg 二义容器，audio|video 双向容忍 ----
+		{"ogg as audio (主表大类)", "audio/ogg", "ogg", false},
+		{"ogg as video (额外容忍)", "video/ogg", "ogg", false},
 		// ---- reject：跨大类粗错配仍拦 ----
 		{"text/plain for jpg (旧用例保持红)", "text/plain", "jpg", true},
 		{"exe-as-jpg 粗错配", "application/x-msdownload", "jpg", true},
 		{"image vs audio 跨大类", "image/png", "mp3", true},
+		{"image vs ogg 跨大类仍拦（容忍未放宽过头）", "image/png", "ogg", true},
 	}
 	for _, tc := range tests {
 		err := ValidateContentType(tc.contentType, tc.ext)
